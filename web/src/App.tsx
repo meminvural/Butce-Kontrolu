@@ -4,9 +4,9 @@ import { useAuth } from './lib/auth';
 import { isConfigured } from './lib/supabase';
 import Layout from './components/Layout';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
 
 // Seyrek kullanılan sayfalar ayrı paketlerde: ilk açılış hızlı kalır
+const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Transactions = lazy(() => import('./pages/Transactions'));
 const Accounts = lazy(() => import('./pages/Accounts'));
 const Categories = lazy(() => import('./pages/Categories'));
@@ -38,7 +38,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={page(<Dashboard />)} />
           <Route path="islemler" element={page(<Transactions />)} />
           <Route path="hesaplar" element={page(<Accounts />)} />
           <Route path="kategoriler" element={page(<Categories />)} />

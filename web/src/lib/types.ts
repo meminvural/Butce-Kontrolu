@@ -238,3 +238,36 @@ export interface CategoryMonthly {
 export interface ExchangeRate { id: string; rate_date: string; base: Currency; quote: Currency; rate: number; source: string }
 
 export interface Attachment { id: string; entry_id: string | null; storage_path: string; file_name: string; mime_type: string | null; size_bytes: number | null; created_at: string }
+
+/** v_ledger_lines: raporlar için düz defter satırı (iptal edilenler hariç, sistem hesapları hariç) */
+export interface LedgerLine {
+  line_id: number;
+  entry_id: string;
+  entry_date: string;
+  entry_kind: EntryKind;
+  description: string | null;
+  account_id: string | null;
+  account_name: string | null;
+  account_kind: AccountKind | null;
+  account_class: AccountClass | null;
+  category_id: string | null;
+  category_name: string | null;
+  category_kind: 'income' | 'expense' | null;
+  category_key: string | null;
+  root_category_id: string | null;
+  root_category_name: string | null;
+  root_key: string | null;
+  amount: number;
+  currency: Currency;
+  memo: string | null;
+}
+
+export interface DebtOutlookRow {
+  month: string;
+  source: 'card_installment' | 'loan_installment';
+  account_id: string;
+  account_name: string;
+  currency: Currency;
+  amount: number;
+  n: number;
+}

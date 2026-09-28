@@ -3,7 +3,7 @@ import { supabase } from './supabase';
 import type {
   AccountBalance, Attachment, BudgetRow, CardOverview, CardStatement, Category, CategoryMonthly, Entry, EntryKind,
   ExchangeRate, InstallmentSlice, Loan, LoanInstallment, MonthSummary, NetBase, NetPosition, NetWorthPoint, Notice,
-  Profile, RecurringRule, UpcomingItem,
+  Profile, RecurringRule, UpcomingItem, LedgerLine, DebtOutlookRow,
 } from './types';
 
 async function unwrap<T>(p: PromiseLike<{ data: T | null; error: { message: string } | null }>): Promise<T> {
@@ -51,6 +51,12 @@ export interface EntryFilter {
   kind?: EntryKind | '';
   q?: string;
   showReversals?: boolean;
+  /** Yalnızca geçerli kayıtlar (iptal edilmişler hariç) — raporlardaki toplamlarla birebir uyum için */
+  postedOnly?: boolean;
+  /** Bu kategorilerden en az birini içeren kayıtlar */
+  categoryIds?: string[];
+  /** Bu açıklamalardan biriyle birebir eşleşen kayıtlar */
+  descriptions?: string[];
   limit: number;
 }
 
@@ -69,6 +75,9 @@ export const useEntries = (f: EntryFilter) =>
       if (f.kind) q = q.eq('kind', f.kind);
       if (!f.showReversals) q = q.neq('kind', 'reversal');
       if (f.q?.trim()) q = q.ilike('description', `%${f.q.trim()}%`);
+      if (f.postedOnly) q = q.eq('status', 'posted');
+      if (f.categoryIds?.length) q = q.overlaps('category_ids', f.categoryIds);
+      if (f.descriptions?.length) q = q.in('description', f.descriptions);
       const { data, error, count } = await q;
       if (error) throw new Error(error.message);
       return { rows: (data ?? []) as Entry[], count: count ?? 0 };
@@ -140,3 +149,39 @@ export async function fetchAllEntries(from?: string, to?: string): Promise<Entry
   }
   return out;
 }
+
+// ---------- Rapor verisi -----------------------------------------------------
+/** Tarih aralığındaki tüm defter satırları (1000'lik sayfalarla); analizler tarayıcıda hızlıca yapılır. */
+export const useLines = (from: string, to: string) =>
+  useQuery({
+    queryKey: ['lines', from, to],
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const out: LedgerLine[] = [];
+      for (let page = 0; page < 100; page++) {
+        const rows = await unwrap<LedgerLine[]>(
+          supabase.from('v_ledger_lines').select('*').gte('entry_date', from).lte('entry_date', to)
+            .order('entry_date').order('line_id').range(page * 1000, page * 1000 + 999));
+        out.push(...rows);
+        if (rows.length < 1000) break;
+      }
+      return out;
+    },
+  });
+
+export const useEarliestDate = () =>
+  useQuery({
+    queryKey: ['earliest'],
+    queryFn: async () => {
+      const rows = await unwrap<{ entry_date: string }[]>(
+        supabase.from('journal_entries').select('entry_date').neq('kind', 'opening_balance').order('entry_date').limit(1));
+      return rows[0]?.entry_date ?? null;
+    },
+  });
+
+export const useDebtOutlook = (months = 12) =>
+  useQuery({
+    queryKey: ['debt-outlook', months],
+    queryFn: () => unwrap<DebtOutlookRow[]>(supabase.rpc('debt_service_outlook', { p_months: months }) as never),
+  });
