@@ -16,6 +16,7 @@ const NAV: { group: string; items: { to: string; label: string; end?: boolean }[
   ] },
   { group: 'Borç ve ödemeler', items: [
     { to: '/kartlar', label: 'Kredi kartları' },
+    { to: '/ekstre', label: 'Ekstre yükle' },
     { to: '/krediler', label: 'Krediler' },
     { to: '/planli', label: 'Planlı ve düzenli' },
     { to: '/takvim', label: 'Takvim' },

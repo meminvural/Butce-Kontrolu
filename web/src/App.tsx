@@ -17,6 +17,7 @@ const Calendar = lazy(() => import('./pages/Calendar'));
 const Budget = lazy(() => import('./pages/Budget'));
 const CashFlow = lazy(() => import('./pages/CashFlow'));
 const Reports = lazy(() => import('./pages/Reports'));
+const Statements = lazy(() => import('./pages/Statements'));
 const Settings = lazy(() => import('./pages/Settings'));
 
 export default function App() {
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="butce" element={page(<Budget />)} />
           <Route path="nakit-akisi" element={page(<CashFlow />)} />
           <Route path="raporlar" element={page(<Reports />)} />
+          <Route path="ekstre" element={page(<Statements />)} />
           <Route path="ayarlar" element={page(<Settings />)} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

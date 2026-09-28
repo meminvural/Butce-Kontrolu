@@ -109,6 +109,18 @@ export const GLOSSARY = {
     what: 'Hesap kesim gününde kapanan dönemin borcu. Son ödeme gününe kadar ödenmelidir.',
     read: 'Ödenmeyen kısım faize girer ve bir sonraki ekstreye devreder.',
   },
+  statement_fresh: {
+    group: 'Borç ve kartlar', title: 'Ekstre güncelliği',
+    what: 'Her kart için bankadan yüklediğiniz son ekstrenin durumu.',
+    formula: 'Bir sonraki hesap kesim tarihi geçtiyse “Yeni ekstre bekleniyor” görünür.',
+    read: 'Güncel ekstre, son ödeme ve asgari tutarın bankanın söylediğiyle aynı olmasını sağlar. Eski ekstrede bu tutarlar tahmindir.',
+  },
+  statement_diff: {
+    group: 'Borç ve kartlar', title: 'Defter–ekstre farkı',
+    what: 'Defterin o hesap kesiminde hesapladığı kart borcu ile bankanın ekstresindeki dönem borcu arasındaki fark.',
+    formula: 'Defterdeki kart borcu − o kesimden sonra faturalanacak taksitler − ekstre dönem borcu',
+    read: 'Sıfıra yakın olmalı. Eksi ise defterde eksik kalem ya da ödeme fazla, artı ise defterde fazla kalem var demektir. Birkaç lira fark yuvarlanmış tutarlardan olabilir.',
+  },
   min_payment: {
     group: 'Borç ve kartlar', title: 'Asgari ödeme',
     what: 'Kartı gecikmeye düşürmemek için ödenmesi gereken en düşük tutar (varsayılan ekstrenin %20’si).',

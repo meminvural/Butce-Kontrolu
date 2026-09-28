@@ -185,3 +185,47 @@ export const useDebtOutlook = (months = 12) =>
     queryKey: ['debt-outlook', months],
     queryFn: () => unwrap<DebtOutlookRow[]>(supabase.rpc('debt_service_outlook', { p_months: months }) as never),
   });
+
+// ---------- Banka ekstresi -----------------------------------------------------
+export interface StatementStatusRow {
+  account_id: string; name: string; last4: string | null; last_cut: string | null; last_due: string | null;
+  statement_debt: number | null; min_payment: number | null; imported_at: string | null;
+  next_cut: string | null; next_due: string | null; days_since_cut: number | null; is_stale: boolean;
+  ledger_debt: number | null; diff: number | null; stmt_limit: number | null; sys_limit: number | null; bank: string | null;
+}
+
+export const useStatementStatus = () =>
+  useQuery({
+    queryKey: ['stmt-status'],
+    queryFn: () => unwrap<StatementStatusRow[]>(supabase.rpc('statement_status') as never),
+  });
+
+/** Bir kartın defterdeki hareketleri (ekstre eşleştirmesi için) */
+export const useCardLedger = (accountId: string | null, from: string, to: string) =>
+  useQuery({
+    enabled: !!accountId,
+    queryKey: ['card-ledger', accountId, from, to],
+    queryFn: async () => {
+      const rows = await unwrap<{ entry_id: string; entry_date: string; entry_kind: string; description: string | null; amount: number }[]>(
+        supabase.from('v_ledger_lines').select('entry_id,entry_date,entry_kind,description,amount')
+          .eq('account_id', accountId!).gte('entry_date', from).lte('entry_date', to).order('entry_date').limit(2000));
+      return rows.map((r) => ({ ...r, amount: Number(r.amount) }));
+    },
+  });
+
+export const useStatementReconcile = (accountId: string | null, cut: string | null) =>
+  useQuery({
+    enabled: !!accountId && !!cut,
+    queryKey: ['stmt-reconcile', accountId, cut],
+    queryFn: async () => {
+      const rows = await unwrap<{ owed: number; unbilled: number; derived: number }[]>(
+        supabase.rpc('statement_reconcile', { p_account_id: accountId, p_cut: cut }) as never);
+      return rows[0] ? { owed: Number(rows[0].owed), unbilled: Number(rows[0].unbilled), derived: Number(rows[0].derived) } : null;
+    },
+  });
+
+export interface ImportResult {
+  added: number; payments: number; skipped: number; reversed: number;
+  ledger_before: number; ledger_after: number; statement_debt: number; difference_after: number;
+}
+export const importStatement = (payload: unknown) => rpc<ImportResult>('import_card_statement', { p: payload });
