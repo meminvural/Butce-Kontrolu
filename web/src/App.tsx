@@ -36,7 +36,7 @@ export default function App() {
 
   const page = (el: JSX.Element) => <Suspense fallback={<div className="page" aria-busy="true" />}>{el}</Suspense>;
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <Routes>
         <Route element={<Layout />}>
           <Route index element={page(<Dashboard />)} />

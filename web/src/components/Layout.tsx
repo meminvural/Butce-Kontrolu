@@ -65,7 +65,7 @@ export default function Layout() {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <img src="/icon.svg" alt="" width={28} height={28} />
+          <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width={28} height={28} />
           <span>Bütçe Defteri</span>
         </div>
         <button className="btn btn-primary btn-block" onClick={() => ctx.openAdd()}>+ İşlem ekle</button>
@@ -78,7 +78,7 @@ export default function Layout() {
       </aside>
 
       <header className="mobile-top">
-        <div className="brand"><img src="/icon.svg" alt="" width={24} height={24} /><span>Bütçe Defteri</span></div>
+        <div className="brand"><img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width={24} height={24} /><span>Bütçe Defteri</span></div>
         <NotificationsBell compact />
       </header>
 

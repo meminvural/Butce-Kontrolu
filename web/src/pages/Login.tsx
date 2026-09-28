@@ -24,7 +24,7 @@ export default function Login() {
   return (
     <div className="login">
       <div className="login-card">
-        <div className="brand"><img src="/icon.svg" alt="" width={32} height={32} /><span>Bütçe Defteri</span></div>
+        <div className="brand"><img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width={32} height={32} /><span>Bütçe Defteri</span></div>
         <p className="muted">Tüm hesaplarınız, kartlarınız ve borçlarınız tek defterde.</p>
         <form className="form" onSubmit={submit}>
           <Field label="E-posta">
