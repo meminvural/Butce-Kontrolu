@@ -1,0 +1,17 @@
+# Netlify, GitHub deposundan otomatik derleme ve yayın için bu dosyayı okur.
+[build]
+  base    = "web"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Bunlar tarayıcıya zaten gönderilen herkese açık (publishable) değerlerdir; veriler RLS ile korunur.
+  VITE_SUPABASE_URL      = "https://fxmkecavnmoftbbxiefo.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "sb_publishable_R0qQs_FicnCBEU38AcGwRg_fHXlBIqW"
+
+# Tek sayfalı uygulama: tüm adresler index.html'e yönlensin
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
