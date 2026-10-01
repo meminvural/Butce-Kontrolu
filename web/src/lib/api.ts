@@ -229,3 +229,16 @@ export interface ImportResult {
   ledger_before: number; ledger_after: number; statement_debt: number; difference_after: number;
 }
 export const importStatement = (payload: unknown) => rpc<ImportResult>('import_card_statement', { p: payload });
+
+// ---------- Finansal sağlık ---------------------------------------------------------
+export type HealthSeverity = 'ok' | 'info' | 'warn' | 'crit';
+export interface HealthCheck {
+  check_key: string; title: string; severity: HealthSeverity; issue_count: number;
+  detail: Record<string, unknown>[]; hint: string;
+}
+export const useFinancialHealth = () =>
+  useQuery({
+    queryKey: ['health'],
+    staleTime: 5 * 60_000,
+    queryFn: () => unwrap<HealthCheck[]>(supabase.rpc('financial_health') as never),
+  });

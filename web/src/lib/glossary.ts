@@ -109,6 +109,11 @@ export const GLOSSARY = {
     what: 'Hesap kesim gününde kapanan dönemin borcu. Son ödeme gününe kadar ödenmelidir.',
     read: 'Ödenmeyen kısım faize girer ve bir sonraki ekstreye devreder.',
   },
+  health: {
+    group: 'Genel durum', title: 'Sistem sağlığı',
+    what: 'Defterinizin bütünlüğünü ve kart, kredi, ekstre tutarlılığını otomatik denetler. Hiçbir veriyi değiştirmez.',
+    read: 'Kırmızı (kritik) = defter kuralı bozulmuş, hemen bakın. Sarı (uyarı) = incelenmesi gereken bir tutarsızlık. Mavi (bilgi) = bilmeniz yeterli. Yeşil = sorun yok.',
+  },
   statement_fresh: {
     group: 'Borç ve kartlar', title: 'Ekstre güncelliği',
     what: 'Her kart için bankadan yüklediğiniz son ekstrenin durumu.',

@@ -119,7 +119,7 @@ Planlı kalem gerçekleşince deftere kayıt atılır ve `realized_entry_id` ile
 
 ## 7. Faz 2–6 nasıl kuruldu
 
-**Kart ekstresi saklanmaz, hesaplanır.** Kesim tarihi C için:
+**Kart ekstresi varsayılan olarak hesaplanır** (bankadan yüklenmiş gerçek ekstre varsa geçmiş dönemde o kullanılır, bkz. §9). Kesim tarihi C için:
 `Ekstre(C) = C günündeki kart borcu − C'den sonra faturalanacak taksit dilimleri`.
 Devreden bakiye kendiliğinden içindedir; ödeme yapıldıkça kalan düşer, geçmiş ekstre asla "bayatlamaz".
 Taksitli alışverişte gider ve limit blokajı alışveriş günü tam tutardır (Türk kart mantığı), ekstreye dilim dilim girer.
@@ -152,3 +152,34 @@ Nakit akışı projeksiyonu, bildirimler, takvim ve özet ekranı bu tek kaynakt
 | 6 Gelişmiş | ✓ | Fiziksel varlıklar, kur çevirisi, belge yönetimi, PDF (yazdır) ve CSV dışa aktarma |
 
 Bilinçli olarak dışarıda bırakılanlar (doküman §55): banka API entegrasyonu, otomatik kur/fiyat çekme, hisse/kripto portföyü, yapay zekâ danışman, OCR, e-posta/push bildirimi (Edge Function + cron gerektirir).
+
+## 9. Ekstre içe aktarma
+
+Bankadan indirilen kredi kartı ekstresi (PDF) **tarayıcıda** okunur; dosya sunucuya gönderilmez, adres/kimlik bilgisi kaydedilmez.
+
+```
+PDF → banka tespiti → ayrıştırma → iç tutarlılık kontrolleri (✓/✗)
+    → defterle eşleştirme (eşleşti / olası / yeni) → kullanıcı onayı → import_card_statement() → mutabakat
+```
+
+- **Eşleştirme** (`web/src/lib/statements/match.ts`): tutar + tarih yakınlığı + açıklamadaki ortak kelime puanı; bire bir eşler. Eşleşen ve olası eşleşen kalemler varsayılan olarak ATLANIR (çift kayıt olmasın), yeni kalemler eklenir.
+- **`import_card_statement(p jsonb)`** tek işlemde (hepsi ya da hiçbiri) kalemleri, ödemeleri, isteğe bağlı tahmini kayıt iptallerini ve kart profili güncellemesini yapar; ekstre özetini `card_statement_imports`a yazar.
+- **Tekrar yükleme güvenli:** aynı dosya (SHA-256) iki kez yüklenemez; kalem başına `st:<hash>:<sıra>` idempotency anahtarı vardır.
+- **Ekstre ↔ defter farkı:** `statement_status()` her kart için defterin ekstre kesimindeki hesaplanan borcu ile bankanın ekstre borcunu karşılaştırır. Fark "Sistem sağlığı"nda uyarı olarak görünür.
+- **Dikkat:** ödeme satırını atlamak, önceki dönem borcunu defterde bırakır ve fark yaratır. Ekstredeki "önceki bakiye" ile defterin kesimden önceki borcu da ayrıca karşılaştırılmalıdır.
+
+## 10. Sistem sağlığı (`financial_health()`)
+
+Salt okunur, 16 kontrol; her biri `ok / info / warn / crit` ciddiyeti, sorun sayısı, ilk 5 örnek ve öneri döner (arayüz: `/saglik`, menüde uyarı/kritik sayısı rozeti).
+
+| Düzey | Kontroller |
+|---|---|
+| Kritik (defter kuralı) | dengesiz kayıt · satırsız kayıt · kopuk iptal bağı · para birimi uyuşmazlığı |
+| Uyarı | limit aşımı · eksi bakiyeli nakit/banka · kategorisiz gelir/gider · ekstre–defter farkı · kredi planı/bakiye uyuşmazlığı · vadesi geçmiş kredi taksidi · vadesi geçmiş planlı ödeme · arşivli hesapta bakiye |
+| Bilgi | güncel ekstresi olmayan kart · kartta fazla ödeme · gelecek tarihli kayıt · olası mükerrer kayıt |
+
+Kritik kontroller normalde veritabanı tetikleyicileriyle engellenir; burada ikinci savunma hattı olarak bulunur. `health_tests.sql`, her kontrolün sorunu gerçekten yakaladığını (tetikleyicileri atlayan süper kullanıcı kayıtlarıyla bozuk durum kurarak) ve temiz veride sessiz kaldığını doğrular.
+
+## 11. Yayın
+
+`main` dalına her gönderimde `.github/workflows/pages.yml` siteyi derler ve GitHub Pages'e yayınlar (`VITE_BASE=/Butce-Kontrolu/`). Veritabanı değişiklikleri Supabase'e migration olarak uygulanır. Depo herkese açıktır: kod görünür, veri RLS ile korunur; gizli anahtar asla depoya konmaz.

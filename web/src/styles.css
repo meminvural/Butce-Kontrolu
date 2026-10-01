@@ -652,3 +652,30 @@ button.heat-cell:hover, button.heat-cell:focus-visible { outline: 2px solid var(
 .stmt-actions { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; justify-content: space-between; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
 .stmt-done { border-left: 4px solid var(--asset); }
 .stmt-done h2 { color: var(--asset); }
+
+/* =====================================================================
+   Sistem sağlığı
+   ===================================================================== */
+.nav-badge { margin-left: 8px; min-width: 18px; padding: 0 6px; border-radius: 99px; background: var(--warn); color: #fff; font-size: 0.7rem; font-weight: 800; line-height: 18px; text-align: center; display: inline-block; }
+.health-summary { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; justify-content: space-between; border-left: 4px solid var(--asset); }
+.health-summary.is-warn { border-left-color: var(--warn); }
+.health-summary.is-crit { border-left-color: var(--debt); }
+.health-summary h2 { margin: 0 0 2px; }
+.health-card { border-left: 4px solid var(--line); }
+.health-card.sev-crit { border-left-color: var(--debt); }
+.health-card.sev-warn { border-left-color: var(--warn); }
+.health-card.sev-info { border-left-color: var(--recv); }
+.health-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
+.health-head h3 { margin: 0; font-size: 1rem; }
+.health-hint { margin: 6px 0 10px; color: var(--muted); font-size: 0.88rem; }
+.health-sample { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.health-sample th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 8px 4px 0; text-transform: capitalize; }
+.health-sample td { padding: 4px 8px 4px 0; border-top: 1px solid var(--line); }
+.health-sample .num { text-align: right; font-variant-numeric: tabular-nums; }
+.health-ok { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 0.9rem; }
+.health-ok li::before { content: '✓ '; color: var(--asset); font-weight: 800; }
+.tag-sev-ok { background: var(--asset-soft); color: var(--asset); }
+.tag-sev-info { background: #dbe7f3; color: var(--recv); }
+.tag-sev-warn { background: #f5ead3; color: var(--warn); }
+.tag-sev-crit { background: var(--debt-soft); color: var(--debt); }
+@media (prefers-color-scheme: dark) { .tag-sev-info { background: #1d2c3a; } .tag-sev-warn { background: #3a2f1a; } }

@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
-import { rpc } from '../lib/api';
+import { rpc, useFinancialHealth } from '../lib/api';
 import QuickAdd, { type QuickAddPreset } from './QuickAdd';
 import NotificationsBell from './Notifications';
 import { Modal } from './ui';
@@ -28,6 +28,7 @@ const NAV: { group: string; items: { to: string; label: string; end?: boolean }[
   ] },
   { group: 'Sistem', items: [
     { to: '/kategoriler', label: 'Kategoriler' },
+    { to: '/saglik', label: 'Sistem sağlığı' },
     { to: '/ayarlar', label: 'Ayarlar' },
   ] },
 ];
@@ -41,6 +42,9 @@ export default function Layout() {
   const [adding, setAdding] = useState<QuickAddPreset | null>(null);
   const [menu, setMenu] = useState(false);
   const ctx: LayoutCtx = { openAdd: (p) => setAdding(p ?? {}) };
+  // Menüde yalnızca kritik/uyarı sayısı gösterilir (bilgi düzeyi rahatsız etmez)
+  const health = useFinancialHealth();
+  const badge = (health.data ?? []).filter((c) => c.severity === 'crit' || c.severity === 'warn').length;
 
   // Düzenli işlemleri önümüzdeki 120 gün için planla (tekrar çalıştırmak güvenli)
   useEffect(() => {
@@ -55,7 +59,7 @@ export default function Layout() {
       {NAV.map((g) => (
         <div key={g.group} className="nav-group">
           <span className="nav-group-title">{g.group}</span>
-          {g.items.map((n) => <NavLink key={n.to} to={n.to} end={n.end}>{n.label}</NavLink>)}
+          {g.items.map((n) => <NavLink key={n.to} to={n.to} end={n.end}>{n.label}{n.to === '/saglik' && badge > 0 && <span className="nav-badge" aria-label={`${badge} sorun`}>{badge}</span>}</NavLink>)}
         </div>
       ))}
     </nav>
