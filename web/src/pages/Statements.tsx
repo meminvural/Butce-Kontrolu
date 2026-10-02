@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
+import type { LayoutCtx } from '../components/Layout';
 import {
   amendStatementLine, deleteStatement, importStatement, rpc, updateStatement, useAccounts, useCardLedger, useCategories,
   useCardSlices, useLedgerMutation, useStatementImports, useStatementReconcile, useStatementStatus,
@@ -12,7 +13,7 @@ import { buildPayload, defaultDecision, isCredit, signedAmount, type LineDecisio
 import { readStatementFile } from '../lib/statements/pdf';
 import { computeChecks } from '../lib/statements/parsers';
 import { addDaysIso } from '../lib/statements/text';
-import type { AccountBalance, Category } from '../lib/types';
+import { PAY_STATUS_LABEL, type AccountBalance, type Category } from '../lib/types';
 import { Lbl } from '../components/Info';
 import { Empty, ErrorText, Money } from '../components/ui';
 
@@ -54,15 +55,20 @@ function IntInput({ value, onCommit, label, min = 1, max = 99 }: { value: number
 // ---------------------------------------------------------------------------
 //  Kart ekstre durumu tablosu
 // ---------------------------------------------------------------------------
-function StatusTable({ rows }: { rows: StatementStatusRow[] }) {
+const PAY_TAG: Record<string, string> = { paid: 'tag-paid', partial: 'tag-partial', awaiting: 'tag-awaiting', overdue: 'tag-overdue' };
+
+function StatusTable({ rows, banks }: { rows: StatementStatusRow[]; banks: AccountBalance[] }) {
+  const ctx = useOutletContext<LayoutCtx | null>();
+  const payNow = (r: StatementStatusRow, amount: number) => ctx?.openAdd({
+    mode: 'transfer', accountId: banks.find((b) => b.currency === 'TRY')?.id, toAccountId: r.account_id, amount, description: `${r.name} ekstre ödemesi` });
   return (
     <section className="panel">
       <h2><Lbl k="statement_fresh">Kart ekstre durumu</Lbl></h2>
-      <p className="chart-note small muted">Her kart için yüklenen son ekstre. “Fark”, defterin o kesimde hesapladığı borç ile bankanın ekstre borcu arasındaki farktır.</p>
+      <p className="chart-note small muted">Her kart için yüklenen son ekstre <strong>güncel ekstredir</strong>; ondan eski ekstreler kapanmış ve ödenmiş sayılır. Ödeme durumu, kesimden sonra karta yapılan ödemelerden hesaplanır. “Fark”, defterin o kesimde hesapladığı borç ile bankanın ekstre borcu arasındaki farktır.</p>
       {rows.length === 0 ? <p className="muted empty-inline">Henüz kredi kartı yok. İlk ekstreyi yüklediğinizde kart ekstreden oluşturulur.</p> : (
         <div className="table-wrap">
           <table className="sum-table">
-            <thead><tr><th>Kart</th><th>Son ekstre</th><th className="num">Dönem borcu</th><th className="num">Asgari</th><th>Son ödeme</th><th>Durum</th><th className="num"><Lbl k="statement_diff">Fark</Lbl></th></tr></thead>
+            <thead><tr><th>Kart</th><th>Son ekstre</th><th className="num">Dönem borcu</th><th className="num">Asgari</th><th>Son ödeme</th><th>Ödeme durumu</th><th>Ekstre</th><th>Güncellik</th><th className="num"><Lbl k="statement_diff">Fark</Lbl></th></tr></thead>
             <tbody>
               {rows.map((r) => {
                 const status = !r.last_cut ? ['Hiç yüklenmedi', 'crit'] : r.is_stale ? ['Yeni ekstre bekleniyor', 'warn'] : ['Güncel', 'ok'];
@@ -74,6 +80,23 @@ function StatusTable({ rows }: { rows: StatementStatusRow[] }) {
                     <td className="num">{r.statement_debt === null ? '—' : money(r.statement_debt, 'TRY')}</td>
                     <td className="num">{r.min_payment === null ? '—' : money(r.min_payment, 'TRY')}</td>
                     <td>{r.last_due ? fmtDate(r.last_due) : '—'}</td>
+                    <td>
+                      {r.pay_status ? (
+                        <div className="pay-cell">
+                          <span><span className={`tag ${PAY_TAG[r.pay_status]}`}>{PAY_STATUS_LABEL[r.pay_status]}</span></span>
+                          <span className="muted small">Ödenen {money(r.paid ?? 0, 'TRY')} · Kalan {money(r.remaining ?? 0, 'TRY')}</span>
+                          <span className={`small ${r.min_met ? 'tone-in' : 'tone-out'}`}>{r.min_met ? '✓ Asgari ödeme karşılandı' : '✗ Asgari ödeme karşılanmadı'}</span>
+                          {(r.remaining ?? 0) > 0 && ctx && (
+                            <span><button type="button" className="link-btn" onClick={() => payNow(r, Math.max((r.min_payment ?? 0) - (r.paid ?? 0), 0) || (r.remaining ?? 0))}>Asgariyi öde</button>{' · '}
+                              <button type="button" className="link-btn" onClick={() => payNow(r, r.remaining ?? 0)}>Tamamını öde</button></span>
+                          )}
+                        </div>
+                      ) : <span className="muted">—</span>}
+                    </td>
+                    <td>{r.is_closed === null ? <span className="muted">—</span>
+                      : r.is_closed ? <span className="tag tag-paid">Kapandı (tamamı ödendi)</span>
+                      : <><span className="tag tag-awaiting">Açık</span><div className="muted small">kalan ödenince kapanır</div></>}
+                      {r.last_cut && <div className="small"><span className="tag tag-current">Güncel ekstre</span></div>}</td>
                     <td><span className={`tag tag-${status[1] === 'ok' ? 'risk-normal' : status[1] === 'warn' ? 'risk-warn' : 'risk-crit'}`}>{status[0]}</span>
                       {r.is_stale && r.next_cut && <span className="muted small"> · kesim {fmtDate(r.next_cut)}</span>}
                       {limDiff && <span className="tag tag-warn" title={`Sistemde ${money(r.sys_limit!, 'TRY')}, ekstrede ${money(r.stmt_limit!, 'TRY')}`}>limit farklı</span>}</td>
@@ -554,10 +577,12 @@ function ImportedEditor({ imp, banks, categories }: { imp: StatementImport; bank
   );
 }
 
-function ImportedStatements({ banks, categories, cards, open, setOpen }: { banks: AccountBalance[]; categories: Category[]; cards: AccountBalance[]; open: string | null; setOpen: (id: string | null) => void }) {
+function ImportedStatements({ banks, categories, cards, open, setOpen, statusRows }: { banks: AccountBalance[]; categories: Category[]; cards: AccountBalance[]; open: string | null; setOpen: (id: string | null) => void; statusRows: StatementStatusRow[] }) {
   const q = useStatementImports();
   if (q.isLoading) return null;
   const rows = q.data ?? [];
+  const latestCut = new Map<string, string>();                       // kart → en yeni yüklenen kesim
+  for (const r of rows) if (!latestCut.has(r.account_id) || r.cut_date > latestCut.get(r.account_id)!) latestCut.set(r.account_id, r.cut_date);
   return (
     <section className="panel" id="yuklenen-ekstreler">
       <h2>Yüklenen ekstreler</h2>
@@ -573,6 +598,14 @@ function ImportedStatements({ banks, categories, cards, open, setOpen }: { banks
                 <button className="imp-head" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : r.id)}>
                   <span><strong>{card?.name ?? 'Kart'}</strong> <span className="muted small">· kesim {fmtDate(r.cut_date)} · {BANK_LABEL[r.bank as keyof typeof BANK_LABEL] ?? r.bank}</span></span>
                   <span className="imp-sum">{money(r.statement_debt, 'TRY')}
+                    {(() => {
+                      if (r.cut_date !== latestCut.get(r.account_id)) return <span className="tag tag-closed" title="Daha yeni bir ekstre yüklü: bu ekstre kapanmış, ödenmiş sayılır">Kapandı · ödenmiş sayıldı</span>;
+                      const st = statusRows.find((x) => x.account_id === r.account_id);
+                      return <>
+                        <span className="tag tag-current">Güncel ekstre</span>
+                        {st?.pay_status && <span className={`tag ${PAY_TAG[st.pay_status]}`}>{PAY_STATUS_LABEL[st.pay_status]}{st.is_closed ? ' · kapandı' : ''}</span>}
+                      </>;
+                    })()}
                     {diff !== null && <span className={`tag ${Math.abs(diff) <= 1 ? 'tag-risk-normal' : 'tag-risk-warn'}`}>{Math.abs(diff) <= 1 ? 'tutuyor' : `fark ${money(diff, 'TRY', true)}`}</span>}
                     <span aria-hidden="true">{isOpen ? '▲' : '▼'}</span></span>
                 </button>
@@ -672,9 +705,9 @@ export default function Statements() {
           onDone={(r) => setResults((x) => ({ ...x, [it.id]: r }))} onRemove={() => setItems((xs) => xs.filter((x) => x.id !== it.id))} />;
       })}
 
-      <ImportedStatements banks={banks} categories={cats} cards={cards} open={openId} setOpen={setOpenId} />
+      <ImportedStatements banks={banks} categories={cats} cards={cards} open={openId} setOpen={setOpenId} statusRows={status.data ?? []} />
 
-      {status.data ? <StatusTable rows={status.data} /> : status.isLoading ? <p className="muted" aria-busy="true">Yükleniyor…</p> : (
+      {status.data ? <StatusTable rows={status.data} banks={banks} /> : status.isLoading ? <p className="muted" aria-busy="true">Yükleniyor…</p> : (
         <Empty title="Durum alınamadı">{status.error instanceof Error ? status.error.message : 'Bilinmeyen hata'} <Link to="/">Özet’e dön</Link></Empty>
       )}
     </div>

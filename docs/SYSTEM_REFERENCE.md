@@ -1,7 +1,7 @@
 # Bütçe Defteri — Sistem Referansı
 
 > **Bu belge otomatik üretilir** (`scripts/gen_reference.py`) — tablolar, fonksiyonlar, yetkiler, rotalar, migration ve test sayıları koddan okunur; elle düzenlemeyin.  
-> Üretim tarihi: 2026-10-02 · Migration: **16** · Test: **283** · Sayfa: **16**
+> Üretim tarihi: 2026-10-02 · Migration: **17** · Test: **313** · Sayfa: **16**
 
 Üretmek için: `psql -X -q -d <db> -f scripts/schema_dump.sql > /tmp/schema.out && python3 scripts/gen_reference.py --dump /tmp/schema.out > docs/SYSTEM_REFERENCE.md`
 
@@ -84,7 +84,7 @@ Hepsi `security_invoker`; RLS çağıran kullanıcıya uygulanır.
 | `card_debt_plan` | `` | `TABLE(account_id uuid, name text, last4 text, currency character, cred…` | invoker | Otomatik borç hesabı: her kredi kartı için son kesilmiş ekstre, asgari, ödenen, kalan, vade, faiz kademesi ve tahmini aylık faiz (sadece asgari ödenirse / hiç ödenmezse). Tahmindir; bankanın ekstresi esastır. |
 | `card_installment_slices` | `p_account_id` | `TABLE(entry_id uuid, entry_date date, description text, slice_no integ…` | invoker | Kartın taksitli alışverişlerinin dilimleri (kaçıncı taksit, faturalama tarihi, tutar). |
 | `card_overview` | `` | `TABLE(account_id uuid, name text, currency character, credit_limit num…` | invoker | Her kart için borç, kullanılabilir limit, son ekstre durumu, sonraki kesim ve faturalanmamış taksitler. |
-| `card_statements` | `p_account_id, p_count` | `TABLE(cut_date date, period_start date, due_date date, statement_amoun…` | invoker | Kartın ekstreleri; ilk satır içinde bulunulan (henüz kesilmemiş) dönemdir. Geçmiş dönem için yüklenmiş gerçek ekstre varsa onun tutarını/asgarisini/son ödemesini, yoksa defterden hesaplananı kullanır. |
+| `card_statements` | `p_account_id, p_count` | `TABLE(cut_date date, period_start date, due_date date, statement_amoun…` | invoker | Kartın ekstreleri; ilk satır içinde bulunulan (henüz kesilmemiş) açık dönemdir. En yeni kesilmiş ekstre GÜNCEL ekstredir (durumu kesimden sonraki ödemelere göre: ödendi/kısmi/bekliyor/gecikmiş); ondan eski her ekstre `closed` (kapandı, ödenmiş sayılır, kalan 0). Yüklenmiş gerçek ekstre varsa onun tutarını/asgarisini/son ödemesini, yoksa defterden hesaplananı kullanır. |
 | `copy_budgets` | `p_from, p_to` | `integer` | definer | Bir ayın bütçelerini başka aya kopyalar; kopyalanan satır sayısını döner. |
 | `create_account` | `p_name, p_kind, p_currency, p_opening_balance, p_opened_on, p_institution_name, p_counterparty_name, p_credit_limit, p_statement_day, p_due_day, p_iban_last4, p_color` | `uuid` | definer | Hesap açar. Kredi kartı için kesim ve son ödeme günü, borç/alacak hesabı için kişi/kurum adı zorunlu; sistem hesabı elle açılamaz. Açılış bakiyesi özkaynak hesabı karşısında kaydedilir. |
 | `create_installment_plan` | `p_account_id, p_total, p_count, p_first_date, p_description` | `integer` | definer | Karta toplam tutar, taksit sayısı ve ilk faturalama tarihiyle taksit planı ekler. |
@@ -111,7 +111,7 @@ Hepsi `security_invoker`; RLS çağıran kullanıcıya uygulanır.
 | `set_card_automation` | `p_account_id, p` | `void` | definer | Kartın asgari ödeme (elle oran ya da limite göre otomatik) ve otomatik ödeme (kapalı/asgari/tamamı/sabit, kaynak hesap, kaç gün önce, onaylı/otomatik) ayarlarını yazar; kaynak hesap ve para birimini doğrular. |
 | `set_opening_balance` | `p_account_id, p_amount, p_date` | `uuid` | definer | Açılış / devreden bakiyeyi düzeltir: eski açılış kaydı iptal edilir, yenisi yazılır (borç hesaplarında tutar borçtur). 0 verilirse açılış kaldırılır. |
 | `statement_reconcile` | `p_account_id, p_cut` | `TABLE(owed numeric, unbilled numeric, derived numeric)` | invoker | Önizleme için defterin verilen kesimdeki durumu: kart borcu (`owed`), faturalanmamış taksit (`unbilled`), ekstreye karşılık gelen tutar (`derived`). |
-| `statement_status` | `` | `TABLE(account_id uuid, name text, last4 text, last_cut date, last_due …` | invoker | Her kart için son ekstre durumu: kesim, borç, asgari, güncellik (`is_stale`), defterin hesapladığı borç ve fark. |
+| `statement_status` | `` | `TABLE(account_id uuid, name text, last4 text, last_cut date, last_due …` | invoker | Her kart için son yüklenen ekstre: kesim, borç, asgari, güncellik (`is_stale`), defterin hesapladığı borç ve fark; ayrıca ÖDEME DURUMU: kesimden sonra ödenen, kalan, asgari karşılandı mı (`min_met`), `pay_status` (paid/partial/awaiting/overdue) ve ekstre kapandı mı (`is_closed`: kalan 0). |
 | `upcoming_items` | `p_days` | `TABLE(due_date date, source_type text, source_id uuid, ref_id uuid, de…` | invoker | Yaklaşan ödeme ve tahsilatlar (kart ekstresi, kredi taksidi, planlı kalemler…) vade sırasıyla; `overdue` bayrağıyla. |
 | `update_account` | `p_id, p` | `void` | definer | Hesap adı, kurum, son 4 hane, limit (kart/ek hesap), kesim günü, son ödeme günü ve asgari ödeme oranını günceller. Tür ve para birimi değişmez. |
 | `update_entry_description` | `p_entry_id, p_description` | `void` | definer | Yalnızca kaydın açıklamasını günceller; tutar ve satırlar değişmez. |
@@ -266,7 +266,7 @@ Tarayıcıda çalışır; PDF dışarı gönderilmez.
 | `import.ts` | Varsayılan kararlar, dosya SHA-256, `import_card_statement` yükü |
 | `pdf.ts` | pdf.js ile tarayıcıda okuma (şifreli PDF desteği) |
 
-## 9. Migration'lar (16)
+## 9. Migration'lar (17)
 
 | Dosya | Başlık |
 |---|---|
@@ -286,10 +286,11 @@ Tarayıcıda çalışır; PDF dışarı gönderilmez.
 | `20260928000014_corrections.sql` | 0014 · Düzeltme araçları (tüm ekranlar için) |
 | `20260928000015_automation.sql` | 0015 · Otomasyon: borç hesaplama · otomatik asgari ödeme · otomatik ödeme · toplu içe aktarma |
 | `20260928000016_import_carry.sql` | 0016 · Toplu içe aktarmada "devreden borç" satırı (kind = 'carry') |
+| `20260928000017_statement_state.sql` | 0017 · Ekstre durumu: ödeme yapıldı mı · ekstre kapandı mı |
 
 Sıra önemlidir. `0005` (enum) ayrı işlem olarak uygulanmadan `0006` çalışmaz. `0007` Supabase Storage'a özeldir (yerel testte atlanır).
 
-## 10. Testler (toplam 283)
+## 10. Testler (toplam 313)
 
 | Dosya | Test |
 |---|---|
@@ -298,6 +299,7 @@ Sıra önemlidir. `0005` (enum) ayrı işlem olarak uygulanmadan `0006` çalış
 | `health_tests.sql` | 47 |
 | `ledger_tests.sql` | 45 |
 | `phases_tests.sql` | 55 |
+| `statement_state_tests.sql` | 30 |
 | `stmt_edit_tests.sql` | 44 |
 
 ```bash

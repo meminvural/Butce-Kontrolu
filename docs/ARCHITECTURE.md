@@ -202,6 +202,14 @@ Defter kuralı değişmez: **kayıt silinmez**. Her düzeltme eski kaydı iptal 
 
 **Otomatik ödeme** (kart başına): kapalı · asgari · ekstre tamamı · sabit tutar; kaynak hesap; son ödemeden kaç gün önce; **onay iste** (bekleyen listesinde tek tıkla kaydet) ya da **otomatik kaydet** (`process_autopay`: uygulama açılışında çalışır; zamanlanmış görev için `run_autopay_all`). Aynı ekstre için ikinci kayıt oluşmaz.
 
+## 9d. Ekstre durumu: ödeme ve kapanma
+
+- **Güncel ekstre:** kartın en yeni kesilmiş ekstresidir. Banka ekstresi yüklendiği anda tahmini (defterden hesaplanan) yerine geçer; yeni ekstre yüklemek eskisini ayrıca "kapatmanızı" gerektirmez.
+- **Eski ekstreler kapanmıştır ve ödenmiş sayılır** (`status = 'closed'`, kalan 0). Yeni ekstre devreden borcu zaten içerir; eskilerin ödemesi ayrıca izlenirse borç iki kez sayılır ve ödenmiş eski ekstreler "gecikmiş" görünürdü.
+- **Güncel ekstrenin ödeme durumu** kesimden sonra karta yapılan ödemelerden hesaplanır: ödendi (kalan 0, ekstre **kapandı**) · kısmi ödendi · ödenmedi · gecikmiş (vade geçti, kalan var). Ayrıca asgari ödemenin karşılanıp karşılanmadığı gösterilir.
+- Görünür yerler: Ekstre sayfası (kart bazında ödeme durumu, kalan, asgari, "Asgariyi/Tamamını öde"), "Yüklenen ekstreler" listesi (güncel / kapandı etiketleri), Kartlar sayfasındaki ekstre tablosu (Güncel ekstre · Kapandı · Banka ekstresi / Tahmini).
+- Eski tarihli bir ekstre sonradan yüklenirse güncel ekstre değişmez; o ekstre kapanmış sayılır.
+
 ## 10. Sistem sağlığı (`financial_health()`)
 
 Salt okunur, 16 kontrol; her biri `ok / info / warn / crit` ciddiyeti, sorun sayısı, ilk 5 örnek ve öneri döner (arayüz: `/saglik`, menüde uyarı/kritik sayısı rozeti).

@@ -193,6 +193,9 @@ export interface StatementStatusRow {
   statement_debt: number | null; min_payment: number | null; imported_at: string | null;
   next_cut: string | null; next_due: string | null; days_since_cut: number | null; is_stale: boolean;
   ledger_debt: number | null; diff: number | null; stmt_limit: number | null; sys_limit: number | null; bank: string | null;
+  /** Son ekstrenin ödeme durumu: kesimden sonra yapılan ödemeler */
+  paid: number | null; remaining: number | null; min_met: boolean | null;
+  pay_status: 'paid' | 'partial' | 'awaiting' | 'overdue' | null; is_closed: boolean | null;
 }
 
 export const useStatementStatus = () =>

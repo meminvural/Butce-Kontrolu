@@ -13,7 +13,7 @@ import { Empty, ErrorText, Field, Money } from '../components/ui';
 const WHAT: Record<string, string> = { min: 'Asgari', full: 'Ekstre tamamı', fixed: 'Sabit tutar' };
 const STATUS: Record<string, { label: string; cls: string }> = {
   paid: { label: 'Ödendi', cls: 'tag-risk-normal' }, partial: { label: 'Kısmi ödendi', cls: 'tag-risk-warn' },
-  awaiting: { label: 'Ödeme bekliyor', cls: 'tag-risk-warn' }, overdue: { label: 'Vadesi geçti', cls: 'tag-risk-crit' },
+  closed: { label: 'Kapandı', cls: 'tag-risk-normal' }, awaiting: { label: 'Ödeme bekliyor', cls: 'tag-risk-warn' }, overdue: { label: 'Vadesi geçti', cls: 'tag-risk-crit' },
 };
 const fmt = (n: number | null) => (n === null ? '' : String(n).replace('.', ','));
 

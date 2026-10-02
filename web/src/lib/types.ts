@@ -170,9 +170,16 @@ export interface CardOverview {
   unbilled_installments: number;
 }
 
-export type StatementStatus = 'open_period' | 'paid' | 'overdue' | 'partial' | 'awaiting';
+export type StatementStatus = 'open_period' | 'paid' | 'overdue' | 'partial' | 'awaiting' | 'closed';
 export const STATEMENT_STATUS_LABEL: Record<StatementStatus, string> = {
   open_period: 'Dönem açık', paid: 'Ödendi', overdue: 'Gecikmiş', partial: 'Kısmi ödendi', awaiting: 'Ödeme bekliyor',
+  closed: 'Kapandı (ödenmiş sayıldı)',
+};
+
+/** Son yüklenen ekstrenin ödeme durumu (statement_status) */
+export type PayStatus = 'paid' | 'partial' | 'awaiting' | 'overdue';
+export const PAY_STATUS_LABEL: Record<PayStatus, string> = {
+  paid: 'Ödendi', partial: 'Kısmi ödendi', awaiting: 'Ödenmedi', overdue: 'Gecikmiş (ödenmedi)',
 };
 
 export interface CardStatement {

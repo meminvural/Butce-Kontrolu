@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { useAccounts, useCardOverview, useCardSlices, useCardStatements } from '../lib/api';
+import { useAccounts, useCardOverview, useCardSlices, useCardStatements, useStatementImports } from '../lib/api';
 import { fmtDate } from '../lib/format';
 import { STATEMENT_STATUS_LABEL, type CardOverview } from '../lib/types';
 import type { LayoutCtx } from '../components/Layout';
@@ -16,6 +16,9 @@ function CardDetail({ card }: { card: CardOverview }) {
   const bank = (useAccounts().data ?? []).find((a) => a.kind === 'bank' && a.currency === card.currency && !a.archived_at);
   const statements = useCardStatements(card.account_id).data ?? [];
   const slices = useCardSlices(card.account_id).data ?? [];
+  const imports = (useStatementImports().data ?? []).filter((i) => i.account_id === card.account_id);
+  const latestIdx = statements.findIndex((x) => !x.is_current);        // en yeni kesilmiş ekstre = güncel ekstre
+  const dayDiff = (a: string, b: string) => Math.abs((new Date(a).getTime() - new Date(b).getTime()) / 86400000);
   const today = new Date().toISOString().slice(0, 10);
 
   // Taksitli alışverişler: kalan dilimler
@@ -48,22 +51,37 @@ function CardDetail({ card }: { card: CardOverview }) {
         <h2>Ekstreler</h2>
         <div className="table-wrap">
           <table className="sum-table">
-            <thead><tr><th>Dönem</th><th>Son ödeme</th><th className="num">Ekstre</th><th className="num">Ödenen</th><th className="num">Kalan</th><th>Durum</th></tr></thead>
+            <thead><tr><th>Dönem</th><th>Son ödeme</th><th className="num">Ekstre</th><th className="num">Ödenen</th><th className="num">Kalan</th><th>Ödeme</th><th>Ekstre</th></tr></thead>
             <tbody>
-              {statements.map((s) => (
-                <tr key={s.cut_date} className={s.is_current ? 'row-current' : ''}>
+              {statements.map((s, idx) => {
+                const bank = imports.some((i) => dayDiff(i.cut_date, s.cut_date) <= 3);
+                const isLatest = idx === latestIdx;
+                return (
+                <tr key={s.cut_date} className={s.is_current ? 'row-current' : isLatest ? 'row-latest' : ''}>
                   <td>{fmtDate(s.period_start)} – {fmtDate(s.cut_date)}</td>
                   <td>{fmtDate(s.due_date)}</td>
                   <td className="num"><Money value={s.statement_amount} currency={card.currency} /></td>
                   <td className="num">{s.is_current ? '' : <Money value={s.paid} currency={card.currency} tone="muted" />}</td>
                   <td className="num">{s.is_current ? '' : <Money value={s.remaining} currency={card.currency} />}</td>
                   <td><StatusTag s={s.status} /></td>
+                  <td>
+                    {s.is_current ? <span className="tag tag-open_period">Açık dönem</span> : (
+                      <>
+                        {isLatest && <span className="tag tag-current">Güncel ekstre</span>}{' '}
+                        {s.status === 'closed' ? <span className="tag tag-closed">Kapandı</span>
+                          : s.remaining <= 0 ? <span className="tag tag-paid">Kapandı (tamamı ödendi)</span>
+                          : <span className="tag tag-awaiting">Açık</span>}{' '}
+                        <span className={`tag ${bank ? 'tag-paid' : 'tag-estimate'}`}>{bank ? 'Banka ekstresi' : 'Tahmini'}</span>
+                      </>
+                    )}
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
-        <p className="field-hint">Açık dönem tutarı, bugün kesilse gelecek ekstredir. Taksitlerin yalnızca o aya düşen dilimi ekstreye girer. Faiz ve gecikme ücretlerini bankanın ekstresine göre “Kart Faizi” gideri olarak bu karttan girin.</p>
+        <p className="field-hint">Kartın en yeni kesilmiş ekstresi “güncel ekstre”dir; ondan eski ekstreler kapanmış ve ödenmiş sayılır (yeni ekstre devreden borcu zaten içerir). “Tahmini” ekstre, banka ekstresi yüklenmediği için defterden hesaplanmıştır. Açık dönem tutarı, bugün kesilse gelecek ekstredir. Taksitlerin yalnızca o aya düşen dilimi ekstreye girer. Faiz ve gecikme ücretlerini bankanın ekstresine göre “Kart Faizi” gideri olarak bu karttan girin.</p>
       </section>
 
       <section className="panel">

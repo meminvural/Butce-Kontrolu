@@ -731,3 +731,10 @@ button.heat-cell:hover, button.heat-cell:focus-visible { outline: 2px solid var(
 .inline-form input { font: inherit; padding: 6px 8px; min-width: 120px; }
 .debt-plan .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 14px 0; }
 .debt-plan .kpi { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface); }
+
+/* Ekstre durumu: kapandı / güncel */
+.tag-closed { background: var(--line); color: var(--muted); }
+.tag-current { background: var(--asset-soft); color: var(--asset); }
+.tag-estimate { background: transparent; color: var(--muted); border: 1px dashed var(--line); }
+.pay-cell { display: grid; gap: 2px; }
+.row-latest { background: color-mix(in srgb, var(--asset-soft) 35%, transparent); }
