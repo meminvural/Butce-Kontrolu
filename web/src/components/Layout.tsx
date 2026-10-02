@@ -13,9 +13,11 @@ const NAV: { group: string; items: { to: string; label: string; end?: boolean }[
     { to: '/', label: 'Özet', end: true },
     { to: '/islemler', label: 'İşlemler' },
     { to: '/hesaplar', label: 'Hesaplar' },
+    { to: '/aktar', label: 'Excel / toplu giriş' },
   ] },
   { group: 'Borç ve ödemeler', items: [
     { to: '/kartlar', label: 'Kredi kartları' },
+    { to: '/borc-plani', label: 'Borç planı ve otomatik ödeme' },
     { to: '/ekstre', label: 'Ekstre yükle' },
     { to: '/krediler', label: 'Krediler' },
     { to: '/planli', label: 'Planlı ve düzenli' },
@@ -50,6 +52,12 @@ export default function Layout() {
   useEffect(() => {
     rpc<number>('materialize_recurring', { p_days: 120 })
       .then((n) => { if (n > 0) qc.invalidateQueries(); })
+      .catch(() => undefined);
+  }, [qc]);
+  // Vadesi gelen "otomatik kaydet" ödemelerini işle (aynı ekstre için ikinci kez kayıt oluşmaz)
+  useEffect(() => {
+    rpc<{ recorded: number }>('process_autopay', {})
+      .then((r) => { if (r && r.recorded > 0) qc.invalidateQueries(); })
       .catch(() => undefined);
   }, [qc]);
   useEffect(() => setMenu(false), [location.pathname]);

@@ -156,6 +156,9 @@ export interface Profile {
   timezone: string;
   budget_warn_pct: number;
   budget_crit_pct: number;
+  min_rule_limit: number;
+  min_rule_low: number;
+  min_rule_high: number;
 }
 
 export interface CardOverview {

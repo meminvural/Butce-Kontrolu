@@ -49,6 +49,14 @@ API_DESC = {
     'amend_entry': 'İşlemi düzeltir (tarih, tutar, açıklama; gelir/gider/kart harcamasında hesap ve kategori; transfer/kart ödemesinde çıkan-giren hesap). Eski kayıt İPTAL edilir, doğrusu yazılır; ekler yeni kayda taşınır. Ekstreden gelen, taksitli, bölünmüş, kredi taksidine/planlı kaleme bağlı kayıtlar reddedilir (ilgili ekrandan düzeltilir ya da iptal edilir).',
     'update_account': 'Hesap adı, kurum, son 4 hane, limit (kart/ek hesap), kesim günü, son ödeme günü ve asgari ödeme oranını günceller. Tür ve para birimi değişmez.',
     'set_opening_balance': 'Açılış / devreden bakiyeyi düzeltir: eski açılış kaydı iptal edilir, yenisi yazılır (borç hesaplarında tutar borçtur). 0 verilirse açılış kaldırılır.',
+    'card_debt_plan': 'Otomatik borç hesabı: her kredi kartı için son kesilmiş ekstre, asgari, ödenen, kalan, vade, faiz kademesi ve tahmini aylık faiz (sadece asgari ödenirse / hiç ödenmezse). Tahmindir; bankanın ekstresi esastır.',
+    'autopay_pending': 'Otomatik ödemesi açık kartlarda bekleyen ödemeler: tutar (asgari / ekstre tamamı / sabit), kaynak hesap, ödeme günü (son ödeme − N gün), zamanı gelip gelmediği. Aynı ekstre için yapılmış ödeme listelenmez.',
+    'apply_autopay': 'Bekleyen otomatik ödemeyi kaydeder (kaynak hesaptan karta transfer). Aynı ekstre için ikinci kez kayıt oluşmaz (`autopay:<kart>:<kesim>:<tür>` anahtarı).',
+    'process_autopay': '"Otomatik kaydet" seçili kartlarda zamanı gelen ödemeleri kaydeder; hatalı olanı atlayıp rapora yazar. Uygulama açılışında çağrılır; zamanlanmış görev de kullanabilir.',
+    'set_card_automation': 'Kartın asgari ödeme (elle oran ya da limite göre otomatik) ve otomatik ödeme (kapalı/asgari/tamamı/sabit, kaynak hesap, kaç gün önce, onaylı/otomatik) ayarlarını yazar; kaynak hesap ve para birimini doğrular.',
+    'apply_min_payment_rule': 'Asgari ödeme kuralı (limit eşiği ve oranlar) değişince "limite göre otomatik" seçili kartların oranını yeniden hesaplar.',
+    'rate_tier_for': 'Çağıranın kendi faiz kademesinden, verilen ekstre borcu için aylık akdi ve gecikme faizi oranı. Kademe girilmemişse varsayılanlar kullanılır.',
+    'import_transactions': 'Toplu içe aktarma (Excel / yapıştırma / hızlı giriş). Satır başına ayrı denenir: hatalı satır diğerlerini engellemez, rapora yazılır. Türler: gider (taksitli dahil), gelir, transfer, kart ödemesi, kart iadesi, devreden borç (gider sayılmayan tarihli açılış kaydı). Aynı `key` ikinci kez eklenmez, böylece aynı dosya tekrar yüklenince çift kayıt oluşmaz.',
     'statement_status': 'Her kart için son ekstre durumu: kesim, borç, asgari, güncellik (`is_stale`), defterin hesapladığı borç ve fark.',
     'statement_reconcile': 'Önizleme için defterin verilen kesimdeki durumu: kart borcu (`owed`), faturalanmamış taksit (`unbilled`), ekstreye karşılık gelen tutar (`derived`).',
     'financial_health': 'Defter bütünlüğü ve kart/kredi/ekstre tutarlılığı denetimi (16 kontrol). Salt okunur; her kontrol için ciddiyet (`ok/info/warn/crit`), sorun sayısı, ilk 5 örnek ve öneri döner.',
@@ -57,6 +65,9 @@ API_DESC = {
     'handle_new_user': 'Yeni kullanıcı kaydında profil ve varsayılan kategorileri oluşturur (tetikleyici).',
 }
 INTERNAL_DESC = {
+    '_rate_tier': 'Kullanıcının faiz kademesinden (yoksa varsayılandan) verilen tutar için akdi ve gecikme faizi oranı.',
+    '_min_pct_rule': 'Kart limitine göre otomatik asgari ödeme oranı: eşik ve altı düşük oran, üstü yüksek oran (profil ayarları).',
+    'run_autopay_all': 'Zamanlanmış görev için (API\'ye kapalı): "otomatik kaydet" seçili kartı olan her kullanıcı adına `process_autopay` çalıştırır.',
     '_statement_entry': 'Tek ekstre satırından defter kaydı üretir (içe aktarma ve satır düzeltme aynı kodu kullanır). Yönü `kind` belirler: ödeme/iade borcu azaltır, diğerleri artırır.',
     '_entry_open': 'Kaydın iptal edilebilir durumda (yayınlanmış, ters kayıt değil) olup olmadığı.',
     '_statement_line_json': 'Ekstre satırını saklanacak biçime getirir (tutar işareti türden gelir: ödeme/iade eksi).',
@@ -82,6 +93,10 @@ INTERNAL_DESC = {
     '_fx_direct': 'İki para birimi arasında doğrudan kayıtlı kur.',
 }
 TRIGGER_DESC = {
+    '_acc_limit_changed': 'Tetikleyici işlevi: kart limiti değişince otomatik asgari ödeme oranını yeniden hesaplatır.',
+    '_ccd_min_auto': 'Tetikleyici işlevi: "limite göre otomatik" seçili kartın asgari ödeme oranını kuraldan yazar.',
+    'ccd_min_auto': 'Otomatik asgari ödeme seçili kartta oranı limit kuralından yazar.',
+    'accounts_limit_min_auto': 'Limit değişince otomatik asgari ödeme oranını yeniden hesaplatır.',
     '_validate_posting': 'Satırın kayda/hesaba/kullanıcıya uygunluğunu, para birimi uyumunu ve arşivli hesap kullanılmamasını doğrular.',
     '_check_entry_balanced': 'Her kayıt, her para biriminde 0\'a kapanmalı. İşlem sonunda (DEFERRED) kontrol edilir; yarım kayıt reddedilir.',
     '_check_account_limits': 'Nakit bakiyesi eksiye düşemez; kart/ek hesap limiti aşılamaz.',

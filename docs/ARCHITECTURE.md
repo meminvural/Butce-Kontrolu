@@ -186,6 +186,22 @@ Defter kuralı değişmez: **kayıt silinmez**. Her düzeltme eski kaydı iptal 
 
 `amend_entry` şunları reddeder ve kullanıcıyı doğru yola yönlendirir: ekstreden gelen kayıt (ekstre ekranından düzeltilir), taksitli alışveriş, bölünmüş harcama, kredi taksidine/planlı kaleme bağlı kayıt (iptal edilir).
 
+## 9c. Toplu giriş, borç hesabı ve otomatik ödeme
+
+**Excel / toplu giriş** (`/aktar`, `web/src/lib/importer/`): Excel (.xlsx), CSV, kopyala-yapıştır veya boş tabloya elle giriş. Dosya yalnızca tarayıcıda okunur.
+- Başlıklardan biçim tanınır: genel şablon (Tarih · Tür · Hesap · Hedef Hesap · Kategori · Tutar · Açıklama · Taksit) ve eski "KART YÖNETİMİ" Excel'i (İşlemler, Ödemeler, Gelir sayfaları; diğer sayfalar yok sayılır).
+- Dosyadaki hesap ve kategori adları sistemdekilerle eşleştirilir (ad, son 4 hane); eşleşmeyen kategoriler tek tıkla oluşturulabilir. Her satır tabloda düzenlenir; geçersiz tarih (ör. 31 Nisan), eksik hesap/kategori, yanlış tür satırın yanında gösterilir ve o satır aktarılmaz.
+- **DEVREDEN** satırları gider sayılmaz: `carry` türüyle, özkaynak karşılığı tarihli açılış kaydı olarak yazılır.
+- `import_transactions` satır başına ayrı denenir (hatalı satır diğerlerini engellemez). Her satırın içerik anahtarı (`xl:<sha256>`) vardır: aynı dosya tekrar yüklenince 0 yeni kayıt oluşur.
+- Doğrulama: gerçek eski Excel (430 satır) aktarılınca 14 kartın 14'ünde Excel'deki "Güncel Borç" ile kuruşu kuruşuna aynı borç çıktı.
+
+**Otomatik borç hesabı** (`card_debt_plan`): her kart için son kesilmiş ekstre, asgari, ödenen, kalan, vade ve tahmini aylık faiz. Faiz oranı ekstre borcuna göre kademelidir (`card_rate_tiers`, kullanıcı düzenler; girilmezse varsayılan). Tahmin: asgariyi ödeyen kalana akdi faiz; ödemeyen asgari kısma gecikme faizi. Bankanın ekstresi esastır.
+**Ödeme önerisi** (`web/src/lib/debtplan.ts`): bütçe önce tüm asgarilere (vadesi yakın önce), kalanı stratejiye göre (en yüksek faiz / en küçük borç / en yakın vade) dağıtılır.
+
+**Otomatik asgari ödeme:** kart "limite göre otomatik" seçilirse oran, profildeki kuraldan (eşik, düşük/yüksek oran) yazılır; limit ya da kural değişince kendiliğinden güncellenir. Ekstreden gelen asgari tutar her zaman önceliklidir.
+
+**Otomatik ödeme** (kart başına): kapalı · asgari · ekstre tamamı · sabit tutar; kaynak hesap; son ödemeden kaç gün önce; **onay iste** (bekleyen listesinde tek tıkla kaydet) ya da **otomatik kaydet** (`process_autopay`: uygulama açılışında çalışır; zamanlanmış görev için `run_autopay_all`). Aynı ekstre için ikinci kayıt oluşmaz.
+
 ## 10. Sistem sağlığı (`financial_health()`)
 
 Salt okunur, 16 kontrol; her biri `ok / info / warn / crit` ciddiyeti, sorun sayısı, ilk 5 örnek ve öneri döner (arayüz: `/saglik`, menüde uyarı/kritik sayısı rozeti).

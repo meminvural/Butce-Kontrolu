@@ -1,7 +1,7 @@
 # Bütçe Defteri — Sistem Referansı
 
 > **Bu belge otomatik üretilir** (`scripts/gen_reference.py`) — tablolar, fonksiyonlar, yetkiler, rotalar, migration ve test sayıları koddan okunur; elle düzenlemeyin.  
-> Üretim tarihi: 2026-10-02 · Migration: **14** · Test: **226** · Sayfa: **14**
+> Üretim tarihi: 2026-10-02 · Migration: **16** · Test: **283** · Sayfa: **16**
 
 Üretmek için: `psql -X -q -d <db> -f scripts/schema_dump.sql > /tmp/schema.out && python3 scripts/gen_reference.py --dump /tmp/schema.out > docs/SYSTEM_REFERENCE.md`
 
@@ -30,7 +30,7 @@ Tarayıcı (React + TypeScript, Vite)
 - `entry_kind`: income · expense · card_purchase · transfer · fx_exchange · card_payment · overdraft_draw · overdraft_repay · loan_disbursement · loan_payment · debt_open · debt_payment · receivable_open · receivable_collection · opening_balance · adjustment · reversal
 - `entry_status`: posted · reversed
 
-## 3. Tablolar (19)
+## 3. Tablolar (20)
 
 | Tablo | RLS | Sütunlar |
 |---|---|---|
@@ -39,10 +39,11 @@ Tarayıcı (React + TypeScript, Vite)
 | `audit_log` | ✓ | `id`, `user_id`, `table_name`, `record_id`, `action`, `old_data`, `new_data`, `at` |
 | `budgets` | ✓ | `id`, `user_id`, `period`, `category_id`, `amount`, `currency` |
 | `card_installment_plans` | ✓ | `entry_id`, `user_id`, `account_id`, `total`, `installment_count`, `first_billing_date` |
+| `card_rate_tiers` | ✓ | `id`, `user_id`, `upto`, `purchase_rate`, `late_rate` |
 | `card_statement_imports` | ✓ | `id`, `user_id`, `account_id`, `bank`, `file_hash`, `cut_date`, `period_start`, `due_date`, `next_cut_date`, `next_due_date`, `statement_debt`, `min_payment`, `previous_balance`, `credit_limit`, `available_limit`, `cash_limit`, `purchase_rate`, `cash_rate`, `late_rate`, `ledger_debt_before`, `ledger_debt_after`, `lines`, `n_lines`, `n_added`, `n_matched`, `imported_at` |
 | `categories` | ✓ | `id`, `user_id`, `parent_id`, `kind`, `name`, `icon`, `sort_order`, `system_key`, `archived_at`, `created_at` |
 | `counterparties` | ✓ | `id`, `user_id`, `name`, `phone`, `note`, `created_at` |
-| `credit_card_details` | ✓ | `account_id`, `statement_day`, `due_day`, `min_payment_pct` |
+| `credit_card_details` | ✓ | `account_id`, `statement_day`, `due_day`, `min_payment_pct`, `min_payment_auto`, `autopay_mode`, `autopay_account_id`, `autopay_fixed`, `autopay_days_before`, `autopay_record` |
 | `currencies` | ✓ | `code`, `name`, `symbol`, `decimals` |
 | `exchange_rates` | ✓ | `id`, `user_id`, `rate_date`, `base`, `quote`, `rate`, `source`, `created_at` |
 | `institutions` | ✓ | `id`, `user_id`, `name`, `kind`, `created_at` |
@@ -50,7 +51,7 @@ Tarayıcı (React + TypeScript, Vite)
 | `loan_details` | ✓ | `account_id`, `principal`, `monthly_rate`, `tax_pct`, `term_months`, `first_payment_date`, `payment_amount` |
 | `loan_installments` | ✓ | `id`, `user_id`, `account_id`, `installment_no`, `due_date`, `payment`, `principal`, `interest`, `tax`, `remaining`, `settled_outside`, `paid_entry_id` |
 | `postings` | ✓ | `id`, `entry_id`, `user_id`, `account_id`, `category_id`, `amount`, `currency`, `memo` |
-| `profiles` | ✓ | `id`, `full_name`, `base_currency`, `timezone`, `budget_warn_pct`, `budget_crit_pct`, `created_at` |
+| `profiles` | ✓ | `id`, `full_name`, `base_currency`, `timezone`, `budget_warn_pct`, `budget_crit_pct`, `created_at`, `min_rule_limit`, `min_rule_low`, `min_rule_high` |
 | `recurring_rules` | ✓ | `id`, `user_id`, `name`, `direction`, `amount`, `currency`, `account_id`, `to_account_id`, `category_id`, `frequency`, `interval_n`, `day_of_month`, `start_date`, `end_date`, `is_active`, `created_at` |
 | `scheduled_items` | ✓ | `id`, `user_id`, `due_date`, `direction`, `amount`, `currency`, `account_id`, `category_id`, `counterparty_id`, `description`, `source_type`, `source_id`, `status`, `realized_entry_id`, `created_at`, `to_account_id` |
 
@@ -68,7 +69,7 @@ Hepsi `security_invoker`; RLS çağıran kullanıcıya uygulanır.
 
 ## 5. Fonksiyonlar
 
-### 5.1 Uygulama API'si (35) — çağıran: giriş yapmış kullanıcı (`authenticated`)
+### 5.1 Uygulama API'si (43) — çağıran: giriş yapmış kullanıcı (`authenticated`)
 
 | Fonksiyon | Parametreler | Döner | Çalışma | Açıklama |
 |---|---|---|---|---|
@@ -76,7 +77,11 @@ Hepsi `security_invoker`; RLS çağıran kullanıcıya uygulanır.
 | `adjust_balance` | `p_account_id, p_actual_balance, p_date, p_reason` | `uuid` | definer | Bakiye düzeltme (mutabakat): bankadaki gerçek bakiye ile sistem uyuşmuyorsa farkı kayıt altına alır. |
 | `amend_entry` | `p_entry_id, p` | `uuid` | definer | İşlemi düzeltir (tarih, tutar, açıklama; gelir/gider/kart harcamasında hesap ve kategori; transfer/kart ödemesinde çıkan-giren hesap). Eski kayıt İPTAL edilir, doğrusu yazılır; ekler yeni kayda taşınır. Ekstreden gelen, taksitli, bölünmüş, kredi taksidine/planlı kaleme bağlı kayıtlar reddedilir (ilgili ekrandan düzeltilir ya da iptal edilir). |
 | `amend_statement_line` | `p_import_id, p_idx, p` | `jsonb` | definer | Yüklenmiş ekstrede satır düzeltir. `op=edit` alanları değiştirir (eski defter kaydı iptal edilir, yenisi yazılır; `include` true/false ile atlanmış satır deftere alınır ya da defterden çıkarılır), `op=add` manuel satır ekler ve deftere yazar, `op=remove` satırı çıkarır (kaydı iptal eder). Satır numaraları asla yeniden kullanılmaz. Dönüş: defterin yeni tutarı ve ekstreyle farkı. |
+| `apply_autopay` | `p_account_id, p_date` | `uuid` | definer | Bekleyen otomatik ödemeyi kaydeder (kaynak hesaptan karta transfer). Aynı ekstre için ikinci kez kayıt oluşmaz (`autopay:<kart>:<kesim>:<tür>` anahtarı). |
+| `apply_min_payment_rule` | `` | `integer` | definer | Asgari ödeme kuralı (limit eşiği ve oranlar) değişince "limite göre otomatik" seçili kartların oranını yeniden hesaplar. |
+| `autopay_pending` | `p_today` | `TABLE(account_id uuid, name text, cut_date date, due_date date, pay_da…` | invoker | Otomatik ödemesi açık kartlarda bekleyen ödemeler: tutar (asgari / ekstre tamamı / sabit), kaynak hesap, ödeme günü (son ödeme − N gün), zamanı gelip gelmediği. Aynı ekstre için yapılmış ödeme listelenmez. |
 | `budget_status` | `p_month` | `TABLE(budget_id uuid, category_id uuid, category_name text, parent_nam…` | invoker | Ay için kategori bütçesi, gerçekleşen, kalan, yüzde ve seviye (`level`). |
+| `card_debt_plan` | `` | `TABLE(account_id uuid, name text, last4 text, currency character, cred…` | invoker | Otomatik borç hesabı: her kredi kartı için son kesilmiş ekstre, asgari, ödenen, kalan, vade, faiz kademesi ve tahmini aylık faiz (sadece asgari ödenirse / hiç ödenmezse). Tahmindir; bankanın ekstresi esastır. |
 | `card_installment_slices` | `p_account_id` | `TABLE(entry_id uuid, entry_date date, description text, slice_no integ…` | invoker | Kartın taksitli alışverişlerinin dilimleri (kaçıncı taksit, faturalama tarihi, tutar). |
 | `card_overview` | `` | `TABLE(account_id uuid, name text, currency character, credit_limit num…` | invoker | Her kart için borç, kullanılabilir limit, son ekstre durumu, sonraki kesim ve faturalanmamış taksitler. |
 | `card_statements` | `p_account_id, p_count` | `TABLE(cut_date date, period_start date, due_date date, statement_amoun…` | invoker | Kartın ekstreleri; ilk satır içinde bulunulan (henüz kesilmemiş) dönemdir. Geçmiş dönem için yüklenmiş gerçek ekstre varsa onun tutarını/asgarisini/son ödemesini, yoksa defterden hesaplananı kullanır. |
@@ -89,17 +94,21 @@ Hepsi `security_invoker`; RLS çağıran kullanıcıya uygulanır.
 | `financial_health` | `` | `TABLE(check_key text, title text, severity text, issue_count integer, …` | invoker | Defter bütünlüğü ve kart/kredi/ekstre tutarlılığı denetimi (16 kontrol). Salt okunur; her kontrol için ciddiyet (`ok/info/warn/crit`), sorun sayısı, ilk 5 örnek ve öneri döner. |
 | `fx_rate` | `p_from, p_to, p_on` | `numeric` | invoker | İki para birimi arası kur: doğrudan, ters veya USD üzerinden çapraz. |
 | `import_card_statement` | `p` | `jsonb` | definer | Ekstre içe aktarma (ATOMİK: hepsi ya da hiçbiri). `action=add` kalemleri `_statement_entry` ile deftere yazar: harcama/taksit/faiz/ücret gider olur, ödeme kaynak hesaptan transfer (kaynak yoksa "kaynak belirsiz"), iade kart kredisi olur. Taksitli kalem "kalan taksitler" planı olarak yazılır (geçmiş dilimler ekstrenin önceki bakiyesindedir). `reverse_entries` tahmini kayıtları iptal eder, istenirse kart profilini günceller, ekstre özetini ve satırları `card_statement_imports`a kaydeder. Aynı dosya ikinci kez yüklenemez; `replace=true` üzerine yazar. |
+| `import_transactions` | `p` | `jsonb` | definer | Toplu içe aktarma (Excel / yapıştırma / hızlı giriş). Satır başına ayrı denenir: hatalı satır diğerlerini engellemez, rapora yazılır. Türler: gider (taksitli dahil), gelir, transfer, kart ödemesi, kart iadesi, devreden borç (gider sayılmayan tarihli açılış kaydı). Aynı `key` ikinci kez eklenmez, böylece aynı dosya tekrar yüklenince çift kayıt oluşmaz. |
 | `materialize_recurring` | `p_days` | `integer` | definer | Düzenli kurallardan önümüzdeki `p_days` gün için planlı kalem üretir. Tekrar çalıştırmak güvenlidir. |
 | `net_position_in_base` | `` | `TABLE(currency character, assets numeric, receivables numeric, liabili…` | invoker | Para birimi bazında net pozisyon ve baz para birimine çevrilmiş net değer. |
 | `net_worth_history` | `p_months` | `TABLE(month_end date, currency character, assets numeric, receivables …` | invoker | Her ay sonu için varlık, alacak, borç ve net varlık. Defter olduğu için her tarih yeniden kurulur. |
 | `notifications` | `p_days` | `TABLE(level text, kind text, title text, amount numeric, currency char…` | invoker | Bildirim listesi: vadesi geçmiş → `critical`, 2 gün içinde → `warning`. |
 | `pay_loan_installment` | `p_installment_id, p_from_account_id, p_date, p_idempotency_key` | `uuid` | definer | Kredi taksidini seçilen hesaptan öder; anapara, faiz ve vergi ayrı satırlara yazılır. İdempotency anahtarı destekler. |
+| `process_autopay` | `` | `jsonb` | definer | "Otomatik kaydet" seçili kartlarda zamanı gelen ödemeleri kaydeder; hatalı olanı atlayıp rapora yazar. Uygulama açılışında çağrılır; zamanlanmış görev de kullanabilir. |
+| `rate_tier_for` | `p_amount` | `TABLE(purchase_rate numeric, late_rate numeric)` | definer | Çağıranın kendi faiz kademesinden, verilen ekstre borcu için aylık akdi ve gecikme faizi oranı. Kademe girilmemişse varsayılanlar kullanılır. |
 | `realize_scheduled_item` | `p_item_id, p_cash_account_id, p_amount, p_date, p_to_amount` | `uuid` | definer | Planlı kalemi gerçekleştirir (hesap, tutar ve tarih değiştirilebilir). Zaten işlenmiş kalem, hesapsız veya kategorisiz gerçekleştirme hata verir. |
 | `record_expense` | `p_account_id, p_category_id, p_amount, p_date, p_description, p_idempotency_key, p_installments` | `uuid` | definer | Gider kaydı (banka, nakit, kart, ek hesap). Kartla harcama GİDER yazılır, kart ödemesi transferdir. `p_installments > 1` ise gider alışveriş gününde TAM tutarla yazılır, kart ekstrelerine dilimler halinde yansır. |
 | `record_income` | `p_account_id, p_category_id, p_amount, p_date, p_description, p_idempotency_key` | `uuid` | definer | Gelir kaydı (hesap + gelir kategorisi). Aynı `p_idempotency_key` tekrar gelirse mevcut kaydı döndürür. |
 | `record_split_expense` | `p_account_id, p_lines, p_date, p_description, p_idempotency_key` | `uuid` | definer | Tek harcamayı birden çok kategoriye böler (`p_lines` jsonb). |
 | `record_transfer` | `p_from_account_id, p_to_account_id, p_amount, p_to_amount, p_date, p_description, p_idempotency_key` | `uuid` | definer | Hesaplar arası transfer (gelir/gider değildir). Kayıt türü hesap türlerinden otomatik belirlenir (kart ödemesi, borç ödeme, döviz bozdurma vb.). Farklı para biriminde `p_to_amount` girilir. |
 | `reverse_entry` | `p_entry_id, p_reason` | `uuid` | definer | Kaydı iptal eder: ters kayıt oluşturur (kayıtlar silinemez). İlgili kredi taksiti ve planlı kalemleri de geri açar. |
+| `set_card_automation` | `p_account_id, p` | `void` | definer | Kartın asgari ödeme (elle oran ya da limite göre otomatik) ve otomatik ödeme (kapalı/asgari/tamamı/sabit, kaynak hesap, kaç gün önce, onaylı/otomatik) ayarlarını yazar; kaynak hesap ve para birimini doğrular. |
 | `set_opening_balance` | `p_account_id, p_amount, p_date` | `uuid` | definer | Açılış / devreden bakiyeyi düzeltir: eski açılış kaydı iptal edilir, yenisi yazılır (borç hesaplarında tutar borçtur). 0 verilirse açılış kaldırılır. |
 | `statement_reconcile` | `p_account_id, p_cut` | `TABLE(owed numeric, unbilled numeric, derived numeric)` | invoker | Önizleme için defterin verilen kesimdeki durumu: kart borcu (`owed`), faturalanmamış taksit (`unbilled`), ekstreye karşılık gelen tutar (`derived`). |
 | `statement_status` | `` | `TABLE(account_id uuid, name text, last4 text, last_cut date, last_due …` | invoker | Her kart için son ekstre durumu: kesim, borç, asgari, güncellik (`is_stale`), defterin hesapladığı borç ve fark. |
@@ -110,9 +119,9 @@ Hepsi `security_invoker`; RLS çağıran kullanıcıya uygulanır.
 
 **Anonim erişim:** yok — hiçbir API fonksiyonu `anon` role açık değil.
 
-Kullanıcıya açık olmayan sistem fonksiyonları: `seed_default_categories`.
+Kullanıcıya açık olmayan sistem fonksiyonları: `run_autopay_all`, `seed_default_categories`.
 
-### 5.2 İç yardımcılar (23)
+### 5.2 İç yardımcılar (25)
 
 | Fonksiyon | Açıklama |
 |---|---|
@@ -128,11 +137,13 @@ Kullanıcıya açık olmayan sistem fonksiyonları: `seed_default_categories`.
 | `_entry_open` | Kaydın iptal edilebilir durumda (yayınlanmış, ters kayıt değil) olup olmadığı. |
 | `_existing_entry` | İdempotency anahtarıyla daha önce yazılmış kaydı bulur. |
 | `_fx_direct` | İki para birimi arasında doğrudan kayıtlı kur. |
+| `_min_pct_rule` | Kart limitine göre otomatik asgari ödeme oranı: eşik ve altı düşük oran, üstü yüksek oran (profil ayarları). |
 | `_new_entry` | Yeni defter kaydı başlığı açar. |
 | `_next_cut` | Sonraki hesap kesim tarihi. |
 | `_owned_account` | Hesabın bu kullanıcıya ait olduğunu doğrular. |
 | `_owned_category` | Kategorinin bu kullanıcıya ait ve beklenen türde olduğunu doğrular. |
 | `_post` | Kayda bir satır (posting) ekler. |
+| `_rate_tier` | Kullanıcının faiz kademesinden (yoksa varsayılandan) verilen tutar için akdi ve gecikme faizi oranı. |
 | `_statement_entry` | Tek ekstre satırından defter kaydı üretir (içe aktarma ve satır düzeltme aynı kodu kullanır). Yönü `kind` belirler: ödeme/iade borcu azaltır, diğerleri artırır. |
 | `_statement_line_json` | Ekstre satırını saklanacak biçime getirir (tutar işareti türden gelir: ödeme/iade eksi). |
 | `_system_account` | Özkaynak / kur çevrim gibi sistem hesabını bulur, yoksa oluşturur. |
@@ -140,11 +151,13 @@ Kullanıcıya açık olmayan sistem fonksiyonları: `seed_default_categories`.
 | `_transfer_kind` | Transferin kayıt türünü hesap türlerinden belirler. |
 | `_uid` | Giriş yapmış kullanıcının kimliği. |
 
-### 5.3 Tetikleyici fonksiyonları (11)
+### 5.3 Tetikleyici fonksiyonları (13)
 
 | Fonksiyon | Görev |
 |---|---|
+| `_acc_limit_changed` | Tetikleyici işlevi: kart limiti değişince otomatik asgari ödeme oranını yeniden hesaplatır. |
 | `_audit` | Değişiklikleri `audit_log` tablosuna yazar. |
+| `_ccd_min_auto` | Tetikleyici işlevi: "limite göre otomatik" seçili kartın asgari ödeme oranını kuraldan yazar. |
 | `_check_account_limits` | Nakit bakiyesi eksiye düşemez; kart/ek hesap limiti aşılamaz. |
 | `_check_entry_balanced` | Her kayıt, her para biriminde 0'a kapanmalı. İşlem sonunda (DEFERRED) kontrol edilir; yarım kayıt reddedilir. |
 | `_forbid_posting_change` | Satırlar güncellenemez ve silinemez. |
@@ -156,9 +169,10 @@ Kullanıcıya açık olmayan sistem fonksiyonları: `seed_default_categories`.
 | `_validate_recurring` | Düzenli kural tutarlılığı: gelir/gider için kategori, transfer için hedef hesap zorunlu. |
 | `handle_new_user` | Yeni kullanıcı için profil ve varsayılan kategoriler. |
 
-### 5.4 Tetikleyiciler (29)
+### 5.4 Tetikleyiciler (32)
 
 - `accounts` · `accounts_guard` · BEFORE UPDATE
+- `accounts` · `accounts_limit_min_auto` · AFTER UPDATE
 - `accounts` · `audit_accounts` · AFTER DELETE
 - `accounts` · `audit_accounts` · AFTER INSERT
 - `accounts` · `audit_accounts` · AFTER UPDATE
@@ -174,6 +188,8 @@ Kullanıcıya açık olmayan sistem fonksiyonları: `seed_default_categories`.
 - `credit_card_details` · `audit_credit_card_details` · AFTER DELETE
 - `credit_card_details` · `audit_credit_card_details` · AFTER INSERT
 - `credit_card_details` · `audit_credit_card_details` · AFTER UPDATE
+- `credit_card_details` · `ccd_min_auto` · BEFORE INSERT
+- `credit_card_details` · `ccd_min_auto` · BEFORE UPDATE
 - `journal_entries` · `audit_journal_entries` · AFTER UPDATE
 - `journal_entries` · `entries_have_postings` · AFTER INSERT
 - `journal_entries` · `journal_entries_guard` · BEFORE DELETE
@@ -188,7 +204,7 @@ Kullanıcıya açık olmayan sistem fonksiyonları: `seed_default_categories`.
 - `recurring_rules` · `recurring_rules_validate` · BEFORE INSERT
 - `recurring_rules` · `recurring_rules_validate` · BEFORE UPDATE
 
-## 6. Satır güvenliği (RLS) politikaları (22)
+## 6. Satır güvenliği (RLS) politikaları (23)
 
 - `accounts` · `accounts_read` · SELECT
 - `accounts` · `accounts_update` · UPDATE
@@ -196,6 +212,7 @@ Kullanıcıya açık olmayan sistem fonksiyonları: `seed_default_categories`.
 - `audit_log` · `audit_read` · SELECT
 - `budgets` · `budgets_own` · ALL
 - `card_installment_plans` · `cip_read` · SELECT
+- `card_rate_tiers` · `card_rate_tiers_own` · ALL
 - `card_statement_imports` · `csi_delete` · DELETE
 - `card_statement_imports` · `csi_read` · SELECT
 - `categories` · `categories_own` · ALL
@@ -215,7 +232,7 @@ Kullanıcıya açık olmayan sistem fonksiyonları: `seed_default_categories`.
 
 Depolama (Storage) politikaları `0007_storage_attachments` ile ayrıca kurulur (Supabase panelinde çalıştırılır).
 
-## 7. Uygulama sayfaları (14)
+## 7. Uygulama sayfaları (16)
 
 | Rota | Bileşen | Menü adı |
 |---|---|---|
@@ -231,6 +248,8 @@ Depolama (Storage) politikaları `0007_storage_attachments` ile ayrıca kurulur 
 | `/nakit-akisi` | `CashFlow.tsx` | Nakit akışı |
 | `/raporlar` | `Reports.tsx` | Raporlar |
 | `/ekstre` | `Statements.tsx` | Ekstre yükle |
+| `/aktar` | `Import.tsx` | Excel / toplu giriş |
+| `/borc-plani` | `DebtPlan.tsx` | Borç planı ve otomatik ödeme |
 | `/saglik` | `Health.tsx` | Sistem sağlığı |
 | `/ayarlar` | `Settings.tsx` | Ayarlar |
 
@@ -247,7 +266,7 @@ Tarayıcıda çalışır; PDF dışarı gönderilmez.
 | `import.ts` | Varsayılan kararlar, dosya SHA-256, `import_card_statement` yükü |
 | `pdf.ts` | pdf.js ile tarayıcıda okuma (şifreli PDF desteği) |
 
-## 9. Migration'lar (14)
+## 9. Migration'lar (16)
 
 | Dosya | Başlık |
 |---|---|
@@ -265,13 +284,16 @@ Tarayıcıda çalışır; PDF dışarı gönderilmez.
 | `20260928000012_financial_health.sql` | 0012 · Finansal sağlık denetimi |
 | `20260928000013_statement_edit.sql` | 0013 · Ekstre düzenleme |
 | `20260928000014_corrections.sql` | 0014 · Düzeltme araçları (tüm ekranlar için) |
+| `20260928000015_automation.sql` | 0015 · Otomasyon: borç hesaplama · otomatik asgari ödeme · otomatik ödeme · toplu içe aktarma |
+| `20260928000016_import_carry.sql` | 0016 · Toplu içe aktarmada "devreden borç" satırı (kind = 'carry') |
 
 Sıra önemlidir. `0005` (enum) ayrı işlem olarak uygulanmadan `0006` çalışmaz. `0007` Supabase Storage'a özeldir (yerel testte atlanır).
 
-## 10. Testler (toplam 226)
+## 10. Testler (toplam 283)
 
 | Dosya | Test |
 |---|---|
+| `automation_tests.sql` | 57 |
 | `corrections_tests.sql` | 35 |
 | `health_tests.sql` | 47 |
 | `ledger_tests.sql` | 45 |

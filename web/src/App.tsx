@@ -19,6 +19,8 @@ const CashFlow = lazy(() => import('./pages/CashFlow'));
 const Reports = lazy(() => import('./pages/Reports'));
 const Statements = lazy(() => import('./pages/Statements'));
 const Health = lazy(() => import('./pages/Health'));
+const Import = lazy(() => import('./pages/Import'));
+const DebtPlan = lazy(() => import('./pages/DebtPlan'));
 const Settings = lazy(() => import('./pages/Settings'));
 
 export default function App() {
@@ -52,6 +54,8 @@ export default function App() {
           <Route path="nakit-akisi" element={page(<CashFlow />)} />
           <Route path="raporlar" element={page(<Reports />)} />
           <Route path="ekstre" element={page(<Statements />)} />
+          <Route path="aktar" element={page(<Import />)} />
+          <Route path="borc-plani" element={page(<DebtPlan />)} />
           <Route path="saglik" element={page(<Health />)} />
           <Route path="ayarlar" element={page(<Settings />)} />
           <Route path="*" element={<Navigate to="/" replace />} />

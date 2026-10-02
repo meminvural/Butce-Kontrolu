@@ -709,3 +709,25 @@ button.heat-cell:hover, button.heat-cell:focus-visible { outline: 2px solid var(
 .recon-line { margin: 12px 0; }
 .danger-zone { border-top-color: var(--debt-soft); }
 .btn-danger { background: var(--debt); color: #fff; border-color: var(--debt); }
+
+/* =====================================================================
+   Toplu giriş · Borç planı
+   ===================================================================== */
+.import-sources { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px; }
+.import-sources .btn { cursor: pointer; }
+.paste-box { display: grid; gap: 8px; margin-top: 10px; }
+.paste-box textarea { width: 100%; font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface); color: inherit; }
+.map-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; margin: 10px 0; }
+.map-grid select { max-width: 100%; }
+.import-summary { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin: 10px 0; }
+.import-tools { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 8px; }
+.import-lines select, .import-lines input[type=date] { font: inherit; font-size: 0.85rem; max-width: 150px; }
+.import-lines .desc-input { min-width: 140px; }
+.pager { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 10px; }
+.card-auto { padding: 12px 0 16px; border-top: 1px solid var(--line); }
+.card-auto:first-of-type { border-top: 0; }
+.card-auto h3 { margin: 0 0 6px; font-size: 1rem; }
+.inline-form { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.inline-form input { font: inherit; padding: 6px 8px; min-width: 120px; }
+.debt-plan .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 14px 0; }
+.debt-plan .kpi { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface); }

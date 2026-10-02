@@ -278,3 +278,58 @@ export const updateStatement = (importId: string, p: Record<string, unknown>) =>
   rpc<AmendResult>('update_statement', { p_import_id: importId, p });
 export const deleteStatement = (importId: string, reverse: boolean) =>
   rpc<{ reversed: number }>('delete_statement', { p_import_id: importId, p_reverse: reverse });
+
+// ---------- Otomasyon: borç planı, otomatik ödeme, faiz kademeleri ------------------------------
+const n0 = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+export interface DebtPlanRow {
+  account_id: string; name: string; last4: string | null; currency: string; credit_limit: number | null; debt: number;
+  cut_date: string | null; due_date: string | null; statement_amount: number | null; min_payment: number | null; paid: number | null;
+  remaining: number | null; min_remaining: number | null; days_to_due: number | null; status: string | null;
+  purchase_rate: number | null; late_rate: number | null; est_interest_min: number | null; est_interest_none: number | null;
+}
+export const useDebtPlan = () =>
+  useQuery({
+    queryKey: ['debt-plan'],
+    queryFn: async () => (await unwrap<Record<string, unknown>[]>(supabase.rpc('card_debt_plan'))).map((r) => ({
+      ...r, credit_limit: n0(r.credit_limit), debt: Number(r.debt), statement_amount: n0(r.statement_amount), min_payment: n0(r.min_payment),
+      paid: n0(r.paid), remaining: n0(r.remaining), min_remaining: n0(r.min_remaining), days_to_due: n0(r.days_to_due),
+      purchase_rate: n0(r.purchase_rate), late_rate: n0(r.late_rate), est_interest_min: n0(r.est_interest_min), est_interest_none: n0(r.est_interest_none),
+    })) as unknown as DebtPlanRow[],
+  });
+
+export interface AutopayRow {
+  account_id: string; name: string; cut_date: string; due_date: string; pay_date: string; amount: number; what: 'min' | 'full' | 'fixed';
+  source_account_id: string; source_name: string; source_balance: number; record_mode: 'confirm' | 'auto'; due_now: boolean;
+}
+export const useAutopayPending = () =>
+  useQuery({
+    queryKey: ['autopay-pending'],
+    queryFn: async () => (await unwrap<Record<string, unknown>[]>(supabase.rpc('autopay_pending'))).map((r) => ({
+      ...r, amount: Number(r.amount), source_balance: Number(r.source_balance),
+    })) as unknown as AutopayRow[],
+  });
+
+export interface CardAutomation {
+  account_id: string; statement_day: number; due_day: number; min_payment_pct: number; min_payment_auto: boolean;
+  autopay_mode: 'off' | 'min' | 'full' | 'fixed'; autopay_account_id: string | null; autopay_fixed: number | null;
+  autopay_days_before: number; autopay_record: 'confirm' | 'auto';
+}
+export const useCardAutomation = () =>
+  useQuery({
+    queryKey: ['card-automation'],
+    queryFn: async () => (await unwrap<Record<string, unknown>[]>(supabase.from('credit_card_details').select('*'))).map((r) => ({
+      ...r, min_payment_pct: Number(r.min_payment_pct), autopay_fixed: n0(r.autopay_fixed),
+    })) as unknown as CardAutomation[],
+  });
+
+export interface RateTier { id: string; upto: number; purchase_rate: number; late_rate: number }
+export const useRateTiers = () =>
+  useQuery({
+    queryKey: ['rate-tiers'],
+    queryFn: async () => (await unwrap<Record<string, unknown>[]>(supabase.from('card_rate_tiers').select('*').order('upto'))).map((r) => ({
+      id: r.id, upto: Number(r.upto), purchase_rate: Number(r.purchase_rate), late_rate: Number(r.late_rate),
+    })) as RateTier[],
+  });
+
+export interface ImportOutcome { added: number; existing: number; failed: { row: number; error: string }[] }
+export const importTransactions = (rows: unknown[]) => rpc<ImportOutcome>('import_transactions', { p: { rows } });
