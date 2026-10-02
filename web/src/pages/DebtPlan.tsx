@@ -223,10 +223,10 @@ export default function DebtPlan() {
       ) : (
         <>
           <section className="kpis">
-            <div className="kpi"><span className="muted small">Toplam kart borcu</span><Money value={totalDebt} currency="TRY" tone="out" /></div>
-            <div className="kpi"><span className="muted small">Ödenmemiş ekstre borcu</span><Money value={totalRem} currency="TRY" /></div>
-            <div className="kpi"><span className="muted small">Kalan asgari ödemeler</span><Money value={totalMin} currency="TRY" /></div>
-            <div className="kpi"><span className="muted small">7 gün içinde vadesi gelen</span><Money value={due7} currency="TRY" tone={due7 > 0 ? 'out' : 'muted'} /></div>
+            <div className="kpi"><span className="muted small">Toplam kart borcu</span><Money value={totalDebt} currency="TRY" animate tone="out" /></div>
+            <div className="kpi"><span className="muted small">Ödenmemiş ekstre borcu</span><Money value={totalRem} currency="TRY" animate /></div>
+            <div className="kpi"><span className="muted small">Kalan asgari ödemeler</span><Money value={totalMin} currency="TRY" animate /></div>
+            <div className="kpi"><span className="muted small">7 gün içinde vadesi gelen</span><Money value={due7} currency="TRY" animate tone={due7 > 0 ? 'out' : 'muted'} /></div>
           </section>
 
           <section className="panel">

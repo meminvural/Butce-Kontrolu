@@ -210,6 +210,18 @@ Defter kuralı değişmez: **kayıt silinmez**. Her düzeltme eski kaydı iptal 
 - Görünür yerler: Ekstre sayfası (kart bazında ödeme durumu, kalan, asgari, "Asgariyi/Tamamını öde"), "Yüklenen ekstreler" listesi (güncel / kapandı etiketleri), Kartlar sayfasındaki ekstre tablosu (Güncel ekstre · Kapandı · Banka ekstresi / Tahmini).
 - Eski tarihli bir ekstre sonradan yüklenirse güncel ekstre değişmez; o ekstre kapanmış sayılır.
 
+## 9e. Marka (logo)
+
+Orijinal logo `docs/brand/logo-orijinal.png`. Uygulamada kullanılan boyutlar `web/public/` altındadır: `logo-96/192/512.png` (arka planı şeffaf; menü, giriş ekranı, manifest), `logo-maskable-512.png` (kurulu uygulama ikonu için güvenli alanlı), `apple-touch-icon.png` (iOS), `favicon.ico`, `favicon-16/32.png`. Şeffaf sürüm, orijinalin dıştan bağlı beyaz zemini temizlenerek üretildi; açık ve koyu temada kenar halesi yoktur.
+
+## 9e. Tema ve canlı arayüz
+
+- **Renkler logodan gelir** (`styles.css` `:root`): derin mavi `#0c5689`, canlı mavi `#0b76c5` (marka/birincil: düğmeler, bağlantılar, aktif menü, odak), turkuaz `#29aad2`, yeşil `#5ab758`, turuncu `#e0792f`. Koyu tema için ayrı, açık tonlu karşılıklar tanımlıdır.
+- **Anlamlı renkler korunur:** yeşil = gelir/varlık/olumlu, kırmızı = gider/borç, turuncu = faiz-masraf/uyarı, mavi tonları = nötr göstergeler. Grafik paleti `--c1…--c8`'dir; grafikler bu değişkenleri kullandığından tek yerden değişir.
+- **KPI kartları** (`Kpi`, `components/ReportUI.tsx`): üst şerit rengi göstergenin anlamından (`TERM_ACCENT`) ya da uyarı tonundan (`tone`) belirlenir; para tutarları `Money animate` ile 0'dan yukarı sayarak gelir (`useCountUp`, hareket azaltma tercihine uyar); tıklanabilir olanlar fareyle yükselir ve ilgili sayfaya/kayıt listesine götürür.
+- **Canlı:** veriler dakikada bir ve siteye dönüldüğünde/bağlantı geldiğinde otomatik yenilenir (`main.tsx`); menüdeki "Canlı" rozeti son güncelleme saatini gösterir, yenilenirken döner, tıklayınca hemen yeniler.
+- Tüm animasyonlar `prefers-reduced-motion` ile kapanır; yazdırmada şerit ve animasyonlar gizlenir.
+
 ## 10. Sistem sağlığı (`financial_health()`)
 
 Salt okunur, 16 kontrol; her biri `ok / info / warn / crit` ciddiyeti, sorun sayısı, ilk 5 örnek ve öneri döner (arayüz: `/saglik`, menüde uyarı/kritik sayısı rozeti).

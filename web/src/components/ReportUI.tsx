@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { cloneElement, isValidElement, useState, type ReactElement, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useEntries, type EntryFilter } from '../lib/api';
 import type { Delta, Insight } from '../lib/analytics';
@@ -9,7 +9,7 @@ import type { Currency } from '../lib/types';
 import { GLOSSARY, type TermKey } from '../lib/glossary';
 import EntryList from './EntryList';
 import { Info, Lbl } from './Info';
-import { Modal } from './ui';
+import { Modal, Money } from './ui';
 
 // ---------------------------------------------------------------------------
 //  Küçük parçalar
@@ -29,22 +29,36 @@ export function DeltaChip({ d, good, currency, label }: { d: Delta | null; good:
   );
 }
 
+/** KPI şerit rengi: anlamı olan göstergeler renklenir (yeşil = olumlu, kırmızı = borç/gider, turuncu = maliyet/uyarı); diğerleri mavi tonlarında */
+type Accent = 'green' | 'red' | 'orange' | 'teal' | 'blue' | 'cyan';
+const TERM_ACCENT: Record<string, Accent> = {
+  income: 'green', assets: 'green', net_worth: 'green', savings_rate: 'green',
+  expense: 'red', liabilities: 'red', debt_ratio: 'red',
+  financial_cost: 'orange', interest_vs_payment: 'orange', installment_load: 'orange',
+  receivables: 'teal', net_flow: 'blue', card_utilization: 'blue', upcoming: 'cyan', avg_daily: 'cyan', avg_ticket: 'cyan',
+};
+const TONE_ACCENT: Record<string, Accent> = { good: 'green', warn: 'orange', bad: 'red' };
+
 export function Kpi({ term, label, value, sub, delta, onClick, hint, tone, children }: {
   term: TermKey; label: string; value: ReactNode; sub?: ReactNode; delta?: ReactNode; onClick?: () => void; hint?: string;
   tone?: 'good' | 'bad' | 'warn'; children?: ReactNode;
 }) {
+  // Para tutarları KPI'da yukarı sayarak gelir
+  const shown = isValidElement(value) && value.type === Money ? cloneElement(value as ReactElement<{ animate?: boolean }>, { animate: true }) : value;
+  const accent = (tone && TONE_ACCENT[tone]) || TERM_ACCENT[term];
+  const cls = `kpi ${accent ? 'kpi-a-' + accent : ''}`;
   const body = (
     <>
       <span className="kpi-label"><Lbl k={term}>{label}</Lbl></span>
-      <span className={`kpi-value ${tone ? 'kpi-' + tone : ''}`}>{value}</span>
+      <span className={`kpi-value ${tone ? 'kpi-' + tone : ''}`}>{shown}</span>
       {delta && <span className="kpi-delta">{delta}</span>}
       {children}
       {sub && <span className="kpi-sub">{sub}</span>}
     </>
   );
   return onClick
-    ? <div className="kpi kpi-click" role="button" tabIndex={0} title={hint} onClick={onClick} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}>{body}</div>
-    : <div className="kpi">{body}</div>;
+    ? <div className={`${cls} kpi-click`} role="button" tabIndex={0} title={hint} onClick={onClick} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}>{body}</div>
+    : <div className={cls}>{body}</div>;
 }
 
 export function Seg<T extends string>({ value, onChange, options, label }: {

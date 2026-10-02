@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { rpc, useFinancialHealth } from '../lib/api';
@@ -34,6 +34,23 @@ const NAV: { group: string; items: { to: string; label: string; end?: boolean }[
     { to: '/ayarlar', label: 'Ayarlar' },
   ] },
 ];
+
+/** Canlı durum rozeti: veriler otomatik yenilenir; tıklayınca hemen yenilenir */
+function LiveBadge() {
+  const qc = useQueryClient();
+  const fetching = useIsFetching() > 0;
+  const [, tick] = useState(0);
+  useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 15_000); return () => clearInterval(t); }, []);
+  const last = qc.getQueryCache().getAll().reduce((m, q) => Math.max(m, q.state.dataUpdatedAt), 0);
+  const time = last ? new Date(last).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+  return (
+    <button type="button" className={`live ${fetching ? 'is-busy' : ''}`} onClick={() => void qc.invalidateQueries()}
+      title="Veriler dakikada bir ve siteye döndüğünüzde otomatik yenilenir. Şimdi yenilemek için tıklayın.">
+      <span className="live-dot" aria-hidden="true" />
+      {fetching ? 'Güncelleniyor…' : <>Canlı <span className="live-time">· {time}</span></>}
+    </button>
+  );
+}
 
 export interface LayoutCtx { openAdd: (preset?: QuickAddPreset) => void }
 
@@ -77,9 +94,10 @@ export default function Layout() {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width={28} height={28} />
+          <img className="brand-logo" src={`${import.meta.env.BASE_URL}logo-96.png`} srcSet={`${import.meta.env.BASE_URL}logo-96.png 1x, ${import.meta.env.BASE_URL}logo-192.png 2x`} alt="" width={40} height={40} />
           <span>Bütçe Defteri</span>
         </div>
+        <LiveBadge />
         <button className="btn btn-primary btn-block" onClick={() => ctx.openAdd()}>+ İşlem ekle</button>
         <NotificationsBell />
         {navList}
@@ -90,7 +108,8 @@ export default function Layout() {
       </aside>
 
       <header className="mobile-top">
-        <div className="brand"><img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width={24} height={24} /><span>Bütçe Defteri</span></div>
+        <div className="brand"><img className="brand-logo" src={`${import.meta.env.BASE_URL}logo-96.png`} srcSet={`${import.meta.env.BASE_URL}logo-96.png 1x, ${import.meta.env.BASE_URL}logo-192.png 2x`} alt="" width={32} height={32} /><span>Bütçe Defteri</span></div>
+        <LiveBadge />
         <NotificationsBell compact />
       </header>
 

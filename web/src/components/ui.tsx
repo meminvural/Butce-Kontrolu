@@ -1,13 +1,15 @@
+import { useCountUp } from '../lib/useCountUp';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { money } from '../lib/format';
 
-export function Money({ value, currency, signed, tone, className = '' }: {
+export function Money({ value, currency, signed, tone, className = '', animate }: {
   value: number | null | undefined; currency: string; signed?: boolean;
-  tone?: 'in' | 'out' | 'auto' | 'muted'; className?: string;
+  tone?: 'in' | 'out' | 'auto' | 'muted'; className?: string; animate?: boolean;
 }) {
   const v = Number(value ?? 0);
+  const shown = useCountUp(v, !!animate);                       // KPI'larda sayı yukarı sayarak gelir
   const t = tone === 'auto' ? (v > 0 ? 'in' : v < 0 ? 'out' : 'muted') : tone;
-  return <span className={`money ${t ? 'tone-' + t : ''} ${className}`}>{money(v, currency, signed)}</span>;
+  return <span className={`money ${t ? 'tone-' + t : ''} ${className}`}>{money(shown, currency, signed)}</span>;
 }
 
 export function Modal({ title, onClose, children, wide }: {

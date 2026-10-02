@@ -1,3 +1,5 @@
+<p align="center"><img src="web/public/logo-192.png" alt="Bütçe Defteri logosu" width="120"></p>
+
 # Bütçe Defteri — Kişisel Finans Yönetim Sistemi
 
 React + TypeScript + Supabase. Çift taraflı defter mimarisi.
