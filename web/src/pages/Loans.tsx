@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { rpc, useAccounts, useLedgerMutation, useLoanInstallments, useLoans } from '../lib/api';
 import { fmtDate, money, parseAmount, todayISO } from '../lib/format';
 import { CURRENCIES, type Currency, type Loan } from '../lib/types';
+import { supabase } from '../lib/supabase';
 import { Empty, ErrorText, Field, Modal, Money } from '../components/ui';
 
 function annuity(p: number, ratePct: number, taxPct: number, n: number) {
@@ -150,10 +151,36 @@ function Schedule({ loan }: { loan: Loan }) {
   );
 }
 
+function LoanEdit({ loan, onClose }: { loan: Loan; onClose: () => void }) {
+  const [name, setName] = useState(loan.name);
+  const [inst, setInst] = useState(loan.institution_name ?? '');
+  const save = useLedgerMutation(() => rpc('update_account', { p_id: loan.id, p: { name, institution_name: inst } }));
+  const archive = useLedgerMutation(async () => {
+    const { error } = await supabase.from('accounts').update({ archived_at: new Date().toISOString() }).eq('id', loan.id);
+    if (error) throw new Error(error.message);
+  });
+  return (
+    <Modal title="Krediyi düzenle" onClose={onClose}>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
+        <Field label="Kredi adı"><input required value={name} onChange={(e) => setName(e.target.value)} /></Field>
+        <Field label="Banka / kurum"><input value={inst} onChange={(e) => setInst(e.target.value)} /></Field>
+        <p className="field-hint">Tutar, faiz veya vade yanlışsa krediyi arşivleyip doğru bilgilerle yeniden ekleyin; ödenmiş taksitler iptal kaydıyla geri alınabilir.</p>
+        <ErrorText error={save.error ?? archive.error} />
+        <div className="actions">
+          <button type="button" className="btn btn-danger-ghost" disabled={archive.isPending}
+            onClick={() => { if (window.confirm('Kredi arşivlensin mi? Planı ve geçmişi silinmez, listeden kalkar.')) archive.mutate(undefined, { onSuccess: onClose }); }}>Arşivle</button>
+          <button className="btn btn-primary" disabled={save.isPending}>Kaydet</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export default function Loans() {
   const { data, isSuccess } = useLoans();
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState<Loan | null>(null);
+  const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const loans = (data ?? []).filter((l) => !l.archived_at);
 
@@ -188,6 +215,7 @@ export default function Loans() {
               </>
             ) : <span className="ok">Kredi kapandı.</span>}
             <button className="link-btn" onClick={() => setOpen(open === l.id ? null : l.id)}>{open === l.id ? 'Planı gizle' : 'Ödeme planı'}</button>
+            <button className="link-btn" onClick={() => setEditingLoan(l)}>Düzenle</button>
           </div>
           {open === l.id && <Schedule loan={l} />}
         </section>
@@ -195,6 +223,7 @@ export default function Loans() {
       <p className="field-hint">Erken/ara ödeme için bankadan krediye “Transfer / Ödeme” girin; anapara düşer, faiz gideri oluşmaz. Planı banka yeniden hesaplarsa krediyi arşivleyip yeni planla ekleyin.</p>
       {adding && <LoanForm onClose={() => setAdding(false)} />}
       {paying && <PayModal loan={paying} onClose={() => setPaying(null)} />}
+      {editingLoan && <LoanEdit loan={editingLoan} onClose={() => setEditingLoan(null)} />}
     </div>
   );
 }

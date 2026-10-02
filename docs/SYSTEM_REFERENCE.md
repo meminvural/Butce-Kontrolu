@@ -1,7 +1,7 @@
 # Bütçe Defteri — Sistem Referansı
 
 > **Bu belge otomatik üretilir** (`scripts/gen_reference.py`) — tablolar, fonksiyonlar, yetkiler, rotalar, migration ve test sayıları koddan okunur; elle düzenlemeyin.  
-> Üretim tarihi: 2026-10-01 · Migration: **12** · Test: **147** · Sayfa: **14**
+> Üretim tarihi: 2026-10-02 · Migration: **14** · Test: **226** · Sayfa: **14**
 
 Üretmek için: `psql -X -q -d <db> -f scripts/schema_dump.sql > /tmp/schema.out && python3 scripts/gen_reference.py --dump /tmp/schema.out > docs/SYSTEM_REFERENCE.md`
 
@@ -68,12 +68,14 @@ Hepsi `security_invoker`; RLS çağıran kullanıcıya uygulanır.
 
 ## 5. Fonksiyonlar
 
-### 5.1 Uygulama API'si (29) — çağıran: giriş yapmış kullanıcı (`authenticated`)
+### 5.1 Uygulama API'si (35) — çağıran: giriş yapmış kullanıcı (`authenticated`)
 
 | Fonksiyon | Parametreler | Döner | Çalışma | Açıklama |
 |---|---|---|---|---|
 | `account_class_of` | `k` | `account_class` | invoker | Hesap türünden sınıfı (`asset/liability/system`) döndürür. |
 | `adjust_balance` | `p_account_id, p_actual_balance, p_date, p_reason` | `uuid` | definer | Bakiye düzeltme (mutabakat): bankadaki gerçek bakiye ile sistem uyuşmuyorsa farkı kayıt altına alır. |
+| `amend_entry` | `p_entry_id, p` | `uuid` | definer | İşlemi düzeltir (tarih, tutar, açıklama; gelir/gider/kart harcamasında hesap ve kategori; transfer/kart ödemesinde çıkan-giren hesap). Eski kayıt İPTAL edilir, doğrusu yazılır; ekler yeni kayda taşınır. Ekstreden gelen, taksitli, bölünmüş, kredi taksidine/planlı kaleme bağlı kayıtlar reddedilir (ilgili ekrandan düzeltilir ya da iptal edilir). |
+| `amend_statement_line` | `p_import_id, p_idx, p` | `jsonb` | definer | Yüklenmiş ekstrede satır düzeltir. `op=edit` alanları değiştirir (eski defter kaydı iptal edilir, yenisi yazılır; `include` true/false ile atlanmış satır deftere alınır ya da defterden çıkarılır), `op=add` manuel satır ekler ve deftere yazar, `op=remove` satırı çıkarır (kaydı iptal eder). Satır numaraları asla yeniden kullanılmaz. Dönüş: defterin yeni tutarı ve ekstreyle farkı. |
 | `budget_status` | `p_month` | `TABLE(budget_id uuid, category_id uuid, category_name text, parent_nam…` | invoker | Ay için kategori bütçesi, gerçekleşen, kalan, yüzde ve seviye (`level`). |
 | `card_installment_slices` | `p_account_id` | `TABLE(entry_id uuid, entry_date date, description text, slice_no integ…` | invoker | Kartın taksitli alışverişlerinin dilimleri (kaçıncı taksit, faturalama tarihi, tutar). |
 | `card_overview` | `` | `TABLE(account_id uuid, name text, currency character, credit_limit num…` | invoker | Her kart için borç, kullanılabilir limit, son ekstre durumu, sonraki kesim ve faturalanmamış taksitler. |
@@ -83,9 +85,10 @@ Hepsi `security_invoker`; RLS çağıran kullanıcıya uygulanır.
 | `create_installment_plan` | `p_account_id, p_total, p_count, p_first_date, p_description` | `integer` | definer | Karta toplam tutar, taksit sayısı ve ilk faturalama tarihiyle taksit planı ekler. |
 | `create_loan` | `p_name, p_institution_name, p_currency, p_principal, p_monthly_rate, p_term_months, p_first_payment_date, p_tax_pct, p_disburse_to_account_id, p_start_date, p_paid_installments` | `uuid` | definer | Kredi hesabını ve taksit planını (anapara/faiz/vergi) oluşturur. `p_paid_installments` kadar taksit "dışarıda ödenmiş" sayılır; `p_disburse_to_account_id` verilirse kullandırılan tutar o hesaba geçer. |
 | `debt_service_outlook` | `p_months` | `TABLE(month date, source text, account_id uuid, account_name text, cur…` | invoker | Önümüzdeki aylar için kaynak bazında (kredi taksidi, kart…) borç servisi tahmini. |
+| `delete_statement` | `p_import_id, p_reverse` | `jsonb` | definer | Ekstre kaydını siler; `p_reverse=true` ise ekstrenin deftere eklediği kayıtlar da iptal edilir (kart borcu ekstre öncesine döner). Defter kaydı hiçbir zaman silinmez. |
 | `financial_health` | `` | `TABLE(check_key text, title text, severity text, issue_count integer, …` | invoker | Defter bütünlüğü ve kart/kredi/ekstre tutarlılığı denetimi (16 kontrol). Salt okunur; her kontrol için ciddiyet (`ok/info/warn/crit`), sorun sayısı, ilk 5 örnek ve öneri döner. |
 | `fx_rate` | `p_from, p_to, p_on` | `numeric` | invoker | İki para birimi arası kur: doğrudan, ters veya USD üzerinden çapraz. |
-| `import_card_statement` | `p` | `jsonb` | definer | Ekstre içe aktarma (ATOMİK: hepsi ya da hiçbiri). `action=add` kalemleri gider/transfer olarak işler, ödemeleri kaynak hesaptan transfer (kaynak yoksa "kaynak belirsiz") yazar, `reverse_entries` ile tahmini kayıtları iptal eder, istenirse kart profilini günceller, ekstre özetini `card_statement_imports`a kaydeder. Aynı dosya ikinci kez yüklenemez; `replace=true` ile üzerine yazılır. Dönüş: eklenen/ödeme/atlanan/iptal sayıları ve kalan fark. |
+| `import_card_statement` | `p` | `jsonb` | definer | Ekstre içe aktarma (ATOMİK: hepsi ya da hiçbiri). `action=add` kalemleri `_statement_entry` ile deftere yazar: harcama/taksit/faiz/ücret gider olur, ödeme kaynak hesaptan transfer (kaynak yoksa "kaynak belirsiz"), iade kart kredisi olur. Taksitli kalem "kalan taksitler" planı olarak yazılır (geçmiş dilimler ekstrenin önceki bakiyesindedir). `reverse_entries` tahmini kayıtları iptal eder, istenirse kart profilini günceller, ekstre özetini ve satırları `card_statement_imports`a kaydeder. Aynı dosya ikinci kez yüklenemez; `replace=true` üzerine yazar. |
 | `materialize_recurring` | `p_days` | `integer` | definer | Düzenli kurallardan önümüzdeki `p_days` gün için planlı kalem üretir. Tekrar çalıştırmak güvenlidir. |
 | `net_position_in_base` | `` | `TABLE(currency character, assets numeric, receivables numeric, liabili…` | invoker | Para birimi bazında net pozisyon ve baz para birimine çevrilmiş net değer. |
 | `net_worth_history` | `p_months` | `TABLE(month_end date, currency character, assets numeric, receivables …` | invoker | Her ay sonu için varlık, alacak, borç ve net varlık. Defter olduğu için her tarih yeniden kurulur. |
@@ -97,16 +100,19 @@ Hepsi `security_invoker`; RLS çağıran kullanıcıya uygulanır.
 | `record_split_expense` | `p_account_id, p_lines, p_date, p_description, p_idempotency_key` | `uuid` | definer | Tek harcamayı birden çok kategoriye böler (`p_lines` jsonb). |
 | `record_transfer` | `p_from_account_id, p_to_account_id, p_amount, p_to_amount, p_date, p_description, p_idempotency_key` | `uuid` | definer | Hesaplar arası transfer (gelir/gider değildir). Kayıt türü hesap türlerinden otomatik belirlenir (kart ödemesi, borç ödeme, döviz bozdurma vb.). Farklı para biriminde `p_to_amount` girilir. |
 | `reverse_entry` | `p_entry_id, p_reason` | `uuid` | definer | Kaydı iptal eder: ters kayıt oluşturur (kayıtlar silinemez). İlgili kredi taksiti ve planlı kalemleri de geri açar. |
+| `set_opening_balance` | `p_account_id, p_amount, p_date` | `uuid` | definer | Açılış / devreden bakiyeyi düzeltir: eski açılış kaydı iptal edilir, yenisi yazılır (borç hesaplarında tutar borçtur). 0 verilirse açılış kaldırılır. |
 | `statement_reconcile` | `p_account_id, p_cut` | `TABLE(owed numeric, unbilled numeric, derived numeric)` | invoker | Önizleme için defterin verilen kesimdeki durumu: kart borcu (`owed`), faturalanmamış taksit (`unbilled`), ekstreye karşılık gelen tutar (`derived`). |
 | `statement_status` | `` | `TABLE(account_id uuid, name text, last4 text, last_cut date, last_due …` | invoker | Her kart için son ekstre durumu: kesim, borç, asgari, güncellik (`is_stale`), defterin hesapladığı borç ve fark. |
 | `upcoming_items` | `p_days` | `TABLE(due_date date, source_type text, source_id uuid, ref_id uuid, de…` | invoker | Yaklaşan ödeme ve tahsilatlar (kart ekstresi, kredi taksidi, planlı kalemler…) vade sırasıyla; `overdue` bayrağıyla. |
+| `update_account` | `p_id, p` | `void` | definer | Hesap adı, kurum, son 4 hane, limit (kart/ek hesap), kesim günü, son ödeme günü ve asgari ödeme oranını günceller. Tür ve para birimi değişmez. |
 | `update_entry_description` | `p_entry_id, p_description` | `void` | definer | Yalnızca kaydın açıklamasını günceller; tutar ve satırlar değişmez. |
+| `update_statement` | `p_import_id, p` | `jsonb` | definer | Yüklenmiş ekstrenin başlığını düzeltir: kesim/son ödeme/dönem başı tarihi, dönem borcu, asgari ödeme, önceki bakiye, limit. İstenirse kartın limit, kesim günü ve son ödeme gününü de günceller. Dönüş: defter ↔ ekstre farkı. |
 
 **Anonim erişim:** yok — hiçbir API fonksiyonu `anon` role açık değil.
 
 Kullanıcıya açık olmayan sistem fonksiyonları: `seed_default_categories`.
 
-### 5.2 İç yardımcılar (20)
+### 5.2 İç yardımcılar (23)
 
 | Fonksiyon | Açıklama |
 |---|---|
@@ -119,6 +125,7 @@ Kullanıcıya açık olmayan sistem fonksiyonları: `seed_default_categories`.
 | `_check_date` | Tarihi doğrular; gelecek tarihli işlemi reddeder ("planlı işlem olarak ekleyin"). |
 | `_day_in_month` | Ayın son gününü aşmadan gün hesabı. |
 | `_due_after` | Kesimden sonraki son ödeme tarihi. |
+| `_entry_open` | Kaydın iptal edilebilir durumda (yayınlanmış, ters kayıt değil) olup olmadığı. |
 | `_existing_entry` | İdempotency anahtarıyla daha önce yazılmış kaydı bulur. |
 | `_fx_direct` | İki para birimi arasında doğrudan kayıtlı kur. |
 | `_new_entry` | Yeni defter kaydı başlığı açar. |
@@ -126,6 +133,8 @@ Kullanıcıya açık olmayan sistem fonksiyonları: `seed_default_categories`.
 | `_owned_account` | Hesabın bu kullanıcıya ait olduğunu doğrular. |
 | `_owned_category` | Kategorinin bu kullanıcıya ait ve beklenen türde olduğunu doğrular. |
 | `_post` | Kayda bir satır (posting) ekler. |
+| `_statement_entry` | Tek ekstre satırından defter kaydı üretir (içe aktarma ve satır düzeltme aynı kodu kullanır). Yönü `kind` belirler: ödeme/iade borcu azaltır, diğerleri artırır. |
+| `_statement_line_json` | Ekstre satırını saklanacak biçime getirir (tutar işareti türden gelir: ödeme/iade eksi). |
 | `_system_account` | Özkaynak / kur çevrim gibi sistem hesabını bulur, yoksa oluşturur. |
 | `_today` | Kullanıcının saat dilimine göre bugün (profil yoksa Europe/Istanbul). |
 | `_transfer_kind` | Transferin kayıt türünü hesap türlerinden belirler. |
@@ -233,12 +242,12 @@ Tarayıcıda çalışır; PDF dışarı gönderilmez.
 |---|---|
 | `types.ts` | Tipler: banka, satır türü, ayrıştırılmış ekstre, hata sınıfı |
 | `text.ts` | PDF metin öğelerinden satır/hücre kurma, EBCDIC çözme (Akbank), tutar ve tarih ayrıştırma |
-| `parsers.ts` | Altı banka ayrıştırıcısı (Akbank, Garanti, İş Bankası, QNB, VakıfBank, Yapı Kredi), banka tespiti, ortak doğrulamalar (`checks`) |
+| `parsers.ts` | Sekiz banka ayrıştırıcısı (Akbank, Enpara, Garanti, İş Bankası, QNB, VakıfBank, Yapı Kredi, Ziraat), banka tespiti, ortak doğrulamalar (`checks`) |
 | `match.ts` | Ekstre satırlarını defter kayıtlarıyla eşleştirir (tutar + tarih + açıklama puanı; ≥5 eşleşti, ≥3,5 olası, altı yeni); kategori önerisi |
 | `import.ts` | Varsayılan kararlar, dosya SHA-256, `import_card_statement` yükü |
 | `pdf.ts` | pdf.js ile tarayıcıda okuma (şifreli PDF desteği) |
 
-## 9. Migration'lar (12)
+## 9. Migration'lar (14)
 
 | Dosya | Başlık |
 |---|---|
@@ -254,16 +263,20 @@ Tarayıcıda çalışır; PDF dışarı gönderilmez.
 | `20260928000010_reports.sql` | 0010 · Rapor altyapısı |
 | `20260928000011_statement_import.sql` | 0011 · Banka ekstresi içe aktarma |
 | `20260928000012_financial_health.sql` | 0012 · Finansal sağlık denetimi |
+| `20260928000013_statement_edit.sql` | 0013 · Ekstre düzenleme |
+| `20260928000014_corrections.sql` | 0014 · Düzeltme araçları (tüm ekranlar için) |
 
 Sıra önemlidir. `0005` (enum) ayrı işlem olarak uygulanmadan `0006` çalışmaz. `0007` Supabase Storage'a özeldir (yerel testte atlanır).
 
-## 10. Testler (toplam 147)
+## 10. Testler (toplam 226)
 
 | Dosya | Test |
 |---|---|
+| `corrections_tests.sql` | 35 |
 | `health_tests.sql` | 47 |
 | `ledger_tests.sql` | 45 |
 | `phases_tests.sql` | 55 |
+| `stmt_edit_tests.sql` | 44 |
 
 ```bash
 createdb butce

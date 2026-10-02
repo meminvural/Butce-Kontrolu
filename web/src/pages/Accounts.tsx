@@ -74,7 +74,75 @@ function PlanModal({ account, onClose }: { account: AccountBalance; onClose: () 
   );
 }
 
-function AccountRow({ a, onAdjust, onPlan }: { a: AccountBalance; onAdjust: () => void; onPlan: () => void }) {
+function EditAccountModal({ account: a, onClose }: { account: AccountBalance; onClose: () => void }) {
+  const isCard = a.kind === 'credit_card';
+  const hasLimit = isCard || a.kind === 'overdraft';
+  const showLast4 = isCard || a.kind === 'bank' || a.kind === 'savings';
+  const liab = isLiability(a.kind);
+  const [name, setName] = useState(a.name);
+  const [inst, setInst] = useState(a.institution_name ?? '');
+  const [last4, setLast4] = useState(a.iban_last4 ?? '');
+  const [limit, setLimit] = useState(a.credit_limit === null ? '' : String(a.credit_limit).replace('.', ','));
+  const [cut, setCut] = useState(String(a.statement_day ?? ''));
+  const [due, setDue] = useState(String(a.due_day ?? ''));
+  const [pct, setPct] = useState('');
+  const [opening, setOpening] = useState('');
+  const [openDate, setOpenDate] = useState('');
+
+  const save = useLedgerMutation(() => rpc('update_account', {
+    p_id: a.id,
+    p: {
+      name, institution_name: inst, iban_last4: last4,
+      ...(hasLimit ? { credit_limit: parseAmount(limit) } : {}),
+      ...(isCard ? { statement_day: cut || null, due_day: due || null, min_payment_pct: pct ? parseAmount(pct) : null } : {}),
+    },
+  }));
+  const open = useLedgerMutation(() => rpc('set_opening_balance', {
+    p_account_id: a.id, p_amount: parseAmount(opening) ?? 0, p_date: openDate || null,
+  }));
+  const openVal = parseAmount(opening);
+
+  return (
+    <Modal title={`${a.name} · düzenle`} onClose={onClose}>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); save.mutate(undefined, { onSuccess: onClose }); }}>
+        <Field label="Hesap adı"><input required value={name} onChange={(e) => setName(e.target.value)} /></Field>
+        <div className="row-2">
+          <Field label="Banka / kurum"><input value={inst} onChange={(e) => setInst(e.target.value)} /></Field>
+          {showLast4 && <Field label="Son 4 hane" hint={isCard ? 'Ekstreler kartla bu numaradan eşleşir' : undefined}>
+            <input maxLength={4} inputMode="numeric" value={last4} onChange={(e) => setLast4(e.target.value.replace(/\D/g, ''))} /></Field>}
+        </div>
+        {hasLimit && <Field label="Limit"><input inputMode="decimal" value={limit} onChange={(e) => setLimit(e.target.value)} /></Field>}
+        {isCard && (
+          <div className="row-2">
+            <Field label="Hesap kesim günü"><input type="number" min={1} max={31} value={cut} onChange={(e) => setCut(e.target.value)} /></Field>
+            <Field label="Son ödeme günü"><input type="number" min={1} max={31} value={due} onChange={(e) => setDue(e.target.value)} /></Field>
+          </div>
+        )}
+        {isCard && <Field label="Asgari ödeme oranı (%)" hint="Boş bırakırsanız değişmez"><input inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} /></Field>}
+        <ErrorText error={save.error} />
+        <div className="actions">
+          <button type="button" className="btn" onClick={onClose}>Vazgeç</button>
+          <button className="btn btn-primary" disabled={save.isPending}>Bilgileri kaydet</button>
+        </div>
+      </form>
+
+      <form className="form danger-zone" onSubmit={(e) => { e.preventDefault(); open.mutate(undefined, { onSuccess: onClose }); }}>
+        <h3>{liab ? 'Devreden / açılış borcunu düzelt' : 'Açılış bakiyesini düzelt'}</h3>
+        <p className="small muted">{liab
+          ? 'Hesabı açtığınız andaki borç tutarı. Ekstredeki “önceki bakiye” ile tutmuyorsa buradan düzeltin; 0 yazarsanız açılış kaydı kaldırılır.'
+          : 'Hesabı açtığınız andaki bakiye. Eski açılış kaydı iptal edilir, yenisi yazılır; 0 yazarsanız kaldırılır.'}</p>
+        <div className="row-2">
+          <Field label="Tutar"><input inputMode="decimal" required value={opening} onChange={(e) => setOpening(e.target.value)} placeholder="0" /></Field>
+          <Field label="Tarih" hint="Boşsa hesabın açılış tarihi"><input type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} /></Field>
+        </div>
+        <ErrorText error={open.error} />
+        <div className="actions"><button className="btn" disabled={open.isPending || openVal === null || openVal < 0}>Açılış bakiyesini uygula</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+function AccountRow({ a, onAdjust, onPlan, onEdit }: { a: AccountBalance; onAdjust: () => void; onPlan: () => void; onEdit: () => void }) {
   const archive = useLedgerMutation(async () => {
     const { error } = await supabase.from('accounts')
       .update({ archived_at: a.archived_at ? null : new Date().toISOString() }).eq('id', a.id);
@@ -107,6 +175,7 @@ function AccountRow({ a, onAdjust, onPlan }: { a: AccountBalance; onAdjust: () =
         <span className="muted">{a.last_activity ? `Son hareket ${fmtDate(a.last_activity)}` : 'Hareket yok'}</span>
         {(a.kind === 'payable' || a.kind === 'receivable') && !a.archived_at &&
           <button className="link-btn" onClick={onPlan}>Taksit planı</button>}
+        <button className="link-btn" onClick={onEdit}>Düzenle</button>
         <button className="link-btn" onClick={onAdjust} disabled={!!a.archived_at}>
           {a.kind === 'fixed_asset' || a.kind === 'investment' ? 'Değer güncelle' : 'Bakiye düzelt'}
         </button>
@@ -122,6 +191,7 @@ export default function Accounts() {
   const [creating, setCreating] = useState(false);
   const [adjusting, setAdjusting] = useState<AccountBalance | null>(null);
   const [planning, setPlanning] = useState<AccountBalance | null>(null);
+  const [editing, setEditing] = useState<AccountBalance | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const list = (data ?? []).filter((a) => showArchived || !a.archived_at);
 
@@ -147,7 +217,7 @@ export default function Accounts() {
           <section key={g.title} className="panel">
             <h2>{g.title}</h2>
             <ul className="acc-rows">
-              {items.map((a) => <AccountRow key={a.id} a={a} onAdjust={() => setAdjusting(a)} onPlan={() => setPlanning(a)} />)}
+              {items.map((a) => <AccountRow key={a.id} a={a} onAdjust={() => setAdjusting(a)} onPlan={() => setPlanning(a)} onEdit={() => setEditing(a)} />)}
             </ul>
           </section>
         );
@@ -163,6 +233,7 @@ export default function Accounts() {
       {creating && <AccountForm onClose={() => setCreating(false)} />}
       {adjusting && <AdjustModal account={adjusting} onClose={() => setAdjusting(null)} />}
       {planning && <PlanModal account={planning} onClose={() => setPlanning(null)} />}
+      {editing && <EditAccountModal account={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }

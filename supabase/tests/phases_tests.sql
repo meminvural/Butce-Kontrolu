@@ -125,11 +125,13 @@ select pg_temp.must_fail('Planlı kalem iki kez işlenemez', format('select real
 -- =========== FAZ 5: DÜZENLİ İŞLEMLER ======================================
 insert into recurring_rules (name, direction, amount, currency, account_id, category_id, frequency, day_of_month, start_date)
 values ('Maaş', 'in', 95000, 'TRY', :'bank', :'cat_maas', 'monthly', 1, current_date) returning id as rule \gset
-select pg_temp.eq('Düzenli: 90 gün için 3 maaş planlandı', materialize_recurring(90), 3);
+select pg_temp.eq('Düzenli: 90 günde ayın 1’i kadar maaş planlandı (takvimden hesaplanır)', materialize_recurring(90),
+  (select count(*) from generate_series(current_date, current_date + 90, interval '1 day') d where extract(day from d) = 1));
 select pg_temp.eq('Düzenli: tekrar çalıştırmak çift kalem üretmez', materialize_recurring(90), 0);
 update recurring_rules set amount = 100000 where id = :'rule';
 select pg_temp.eq('Kural güncellenince bekleyenler temizlendi', (select count(*) from scheduled_items where source_id = :'rule'), 0);
-select pg_temp.eq('Yeniden üretildi (yeni tutarla)', materialize_recurring(90), 3);
+select pg_temp.eq('Yeniden üretildi (yeni tutarla)', materialize_recurring(90),
+  (select count(*) from generate_series(current_date, current_date + 90, interval '1 day') d where extract(day from d) = 1));
 select pg_temp.eq('Yeni tutar 100.000', (select max(amount) from scheduled_items where source_id = :'rule'), 100000);
 select pg_temp.must_fail('Kategorisiz gelir kuralı reddedilir',
   format('insert into recurring_rules (name, direction, amount, currency, account_id, frequency, start_date) values (%L, %L, 1, %L, %L, %L, current_date)',

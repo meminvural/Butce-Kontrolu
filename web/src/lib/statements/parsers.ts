@@ -44,26 +44,33 @@ function empty(bank: BankId, product: string): ParsedStatement {
   };
 }
 
+/** Ekstre iç tutarlılık kontrolleri. Okuma sonrası ve kullanıcı rakamları düzelttikçe yeniden hesaplanır. */
+export function computeChecks(st: ParsedStatement): ParsedStatement['checks'] {
+  const checks: ParsedStatement['checks'] = [];
+  if (st.previousBalance !== null) {
+    const sum = round2(st.previousBalance + st.lines.reduce((a, l) => a + l.amount, 0));
+    const ok = Math.abs(sum - st.statementDebt) <= 0.02;
+    checks.push({ id: 'sum', ok, label: 'Önceki bakiye + kalemler = dönem borcu',
+      detail: ok ? undefined : `Kalemlerden hesaplanan ${sum.toFixed(2)}, ekstredeki ${st.statementDebt.toFixed(2)} (fark ${(sum - st.statementDebt).toFixed(2)})` });
+  }
+  if (st.summary.payments !== null) {
+    const pay = round2(-st.lines.filter((l) => l.amount < 0).reduce((a, l) => a + l.amount, 0));
+    const ok = Math.abs(pay - Math.abs(st.summary.payments)) <= 0.02;
+    checks.push({ id: 'pay', ok, label: 'Ödemeler ekstre özetiyle uyumlu', detail: ok ? undefined : `Kalemlerde ${pay.toFixed(2)}, özette ${Math.abs(st.summary.payments).toFixed(2)}` });
+  }
+  if (st.minPayment !== null) checks.push({ id: 'min', ok: st.minPayment <= st.statementDebt + 0.01, label: 'Asgari ödeme ≤ dönem borcu' });
+  if (st.dueDate) checks.push({ id: 'dates', ok: st.dueDate > st.cutDate, label: 'Son ödeme tarihi kesimden sonra' });
+  if (st.limit !== null && st.availableLimit !== null) checks.push({ id: 'limit', ok: st.availableLimit <= st.limit + 0.01, label: 'Kullanılabilir limit ≤ limit' });
+  return checks;
+}
+
 /** Bütün bankalar için ortak doğrulamalar. Para verisi olduğu için okuma hatası sessiz kalmamalı. */
 function finalize(st: ParsedStatement): ParsedStatement {
   if (!st.cutDate) throw new StatementError('PARSE', 'Hesap kesim tarihi okunamadı');
   if (!(st.statementDebt >= 0)) throw new StatementError('PARSE', 'Dönem borcu okunamadı');
   if (!st.periodStart) st.periodStart = addDaysIso(addMonthsIso(st.cutDate, -1), 1);
   st.lines.forEach((l, i) => { l.idx = i; });
-  if (st.previousBalance !== null) {
-    const sum = round2(st.previousBalance + st.lines.reduce((a, l) => a + l.amount, 0));
-    const ok = Math.abs(sum - st.statementDebt) <= 0.02;
-    st.checks.push({ id: 'sum', ok, label: 'Önceki bakiye + kalemler = dönem borcu',
-      detail: ok ? undefined : `Kalemlerden hesaplanan ${sum.toFixed(2)}, ekstredeki ${st.statementDebt.toFixed(2)} (fark ${(sum - st.statementDebt).toFixed(2)})` });
-  }
-  if (st.summary.payments !== null) {
-    const pay = round2(-st.lines.filter((l) => l.amount < 0).reduce((a, l) => a + l.amount, 0));
-    const ok = Math.abs(pay - Math.abs(st.summary.payments)) <= 0.02;
-    st.checks.push({ id: 'pay', ok, label: 'Ödemeler ekstre özetiyle uyumlu', detail: ok ? undefined : `Kalemlerde ${pay.toFixed(2)}, özette ${Math.abs(st.summary.payments).toFixed(2)}` });
-  }
-  if (st.minPayment !== null) st.checks.push({ id: 'min', ok: st.minPayment <= st.statementDebt + 0.01, label: 'Asgari ödeme ≤ dönem borcu' });
-  if (st.dueDate) st.checks.push({ id: 'dates', ok: st.dueDate > st.cutDate, label: 'Son ödeme tarihi kesimden sonra' });
-  if (st.limit !== null && st.availableLimit !== null) st.checks.push({ id: 'limit', ok: st.availableLimit <= st.limit + 0.01, label: 'Kullanılabilir limit ≤ limit' });
+  st.checks = computeChecks(st);
   for (const c of st.checks) if (!c.ok) st.warnings.push(`${c.label}: ${c.detail ?? 'tutmuyor'}`);
   if (st.lines.length === 0) st.warnings.push('Ekstrede işlem satırı bulunamadı.');
   return st;
@@ -339,9 +346,113 @@ function parseAkbank(rows: Row[]): ParsedStatement {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+//  Ziraat Bankası (Bankkart)
+//  Not: PDF'in metin katmanında "Ziraat" yazmaz (logo resim); "Bankkart" ile tanınır.
+//  Ödemeler tutarın sonunda "+" ile işaretlidir; diğer tutarlar borçtur.
+// ---------------------------------------------------------------------------
+/** "Etiket : değer" düzenindeki satırlarda etiketin yanındaki değer hücresi */
+function valueAfter(rows: Row[], label: string, side: 'left' | 'right' | 'any' = 'any'): string | null {
+  for (const r of rows) {
+    for (let i = 0; i < r.cells.length; i++) {
+      const c = r.cells[i];
+      if (norm(c.s) !== label) continue;
+      if (side === 'left' && c.x > 300) continue;
+      if (side === 'right' && c.x <= 300) continue;
+      const v = r.cells.slice(i + 1).find((x) => x.s !== ':');
+      if (v) return v.s;
+    }
+  }
+  return null;
+}
+
+function parseZiraat(rows: Row[]): ParsedStatement {
+  const t = rows.map((r) => norm(r.text)).join('\n');
+  const st = empty('ziraat', 'Bankkart');
+  st.cardLast4 = first(t, /\d{4}-[#*]{4}-[#*]{4}-(\d{4})/);
+  st.cutDate = parseDate(valueAfter(rows, 'hesap kesim tarihi', 'left') ?? '') ?? '';
+  st.dueDate = parseDate(valueAfter(rows, 'son odeme tarihi', 'left') ?? '');
+  st.statementDebt = num(valueAfter(rows, 'donem borcu tl')) ?? NaN;
+  st.minPayment = num(valueAfter(rows, 'asgari odeme tutari tl'));
+  st.limit = num(valueAfter(rows, 'kart limiti'));
+  st.availableLimit = num(valueAfter(rows, 'kullanilabilir kart limiti'));
+  st.cashLimit = num(valueAfter(rows, 'nakit avans limiti'));
+  st.nextCutDate = parseDate(valueAfter(rows, 'sonraki hesap kesim tarihi') ?? '');
+  st.nextDueDate = parseDate(valueAfter(rows, 'sonraki son odeme tarihi') ?? '');
+  st.rates = { purchase: mrate(first(t, /alisveris faizi %([\d,]+)/)), cash: mrate(first(t, /nakit avans faizi %([\d,]+)/)), late: mrate(first(t, /alisveris gecikme faizi:? %([\d,]+)/)) };
+
+  // Özet kutusu: devreden · harcamalar · faiz/ücret · ödemeler · dönem borcu (TL satırı)
+  const sum = rows.find((r) => r.cells.length === 5 && r.cells.every((c) => /TL$/.test(c.s) && parseMoney(c.s)));
+  if (sum) {
+    const v = sum.cells.map((c) => parseMoney(c.s)!.value);
+    st.previousBalance = v[0]; st.summary = { purchases: v[1], feesInterest: v[2], payments: v[3] };
+  }
+  let suffix: string | null = st.cardLast4;
+  for (const r of rows) {
+    const s = norm(r.text);
+    const sec = s.match(/^kart no\s*:\s*\d{4}-[#*]{4}-[#*]{4}-(\d{4})/);
+    if (sec) { suffix = sec[1]; continue; }
+    if (/^onceki aydan devir/.test(s)) { st.previousBalance ??= num(inX(r, 380, 450)[0]?.s); continue; }
+    const d = dateAtStart(r.cells[0]?.s ?? '');
+    if (!d) continue;
+    const amtCell = inX(r, 380, 450).find((c) => parseMoney(c.s));
+    if (!amtCell) continue;
+    const m = parseMoney(amtCell.s)!;
+    const desc = r.cells.filter((c) => c.x > 60 && c.x < 380).map((c) => c.s).join(' ');
+    st.lines.push(line(0, d.date, false, desc, m.plus ? -m.value : m.value, suffix, null));
+  }
+  return finalize(st);
+}
+
+// ---------------------------------------------------------------------------
+//  Enpara
+// ---------------------------------------------------------------------------
+function parseEnpara(rows: Row[]): ParsedStatement {
+  const t = rows.map((r) => norm(r.text)).join('\n');
+  const st = empty('enpara', 'Enpara Kredi Kartı');
+  st.cardLast4 = first(t, /kart numarasi\s+\d{4} \d{2}\S* \S+ (\d{4})/);
+  st.cutDate = parseDate(valueAfter(rows, 'ekstre tarihi') ?? '') ?? '';
+  st.dueDate = parseDate(valueAfter(rows, 'son odeme tarihi') ?? '');
+  st.statementDebt = num(valueAfter(rows, 'ekstre borcu')) ?? NaN;
+  st.minPayment = num(valueAfter(rows, 'minimum odeme tutari'));
+  st.limit = num(valueAfter(rows, 'kart limiti'));
+  st.availableLimit = num(valueAfter(rows, 'kullanilabilir kart limiti'));
+  const nxt = t.match(/bir sonraki ekstrenizin tarihi (\d\d\/\d\d\/\d{4}), son odeme tarihi ise (\d\d\/\d\d\/\d{4})/);
+  if (nxt) { st.nextCutDate = parseDate(nxt[1]); st.nextDueDate = parseDate(nxt[2]); }
+  const rate = t.match(/aylik\s*%([\d,]+)\s*%([\d,]+)\s*%([\d,]+)\s*%([\d,]+)\s*%([\d,]+)/);
+  if (rate) st.rates = { purchase: mrate(rate[1]), cash: mrate(rate[2]), late: mrate(rate[4]) };
+
+  // Özet: bir önceki borç · ödemeler · harcamalar · nakit avans · faiz/vergi/ücret · ekstre borcu
+  const sum = rows.find((r) => r.cells.length === 6 && r.cells.every((c) => /TL$/.test(c.s) && parseMoney(c.s)));
+  if (sum) {
+    const v = sum.cells.map((c) => parseMoney(c.s)!.value);
+    st.previousBalance = v[0];
+    st.summary = { purchases: round2(v[2] + v[3]), feesInterest: v[4], payments: v[1] };
+  }
+  let suffix: string | null = st.cardLast4;
+  for (const r of rows) {
+    const s = norm(r.text);
+    const sec = s.match(/^\d{4} \d{2}\S* \S+ (\d{4}) numarali/);
+    if (sec) { suffix = sec[1]; continue; }
+    if (/^bir onceki ekstre bakiyeniz/.test(s)) { st.previousBalance ??= num(r.cells[r.cells.length - 1]?.s); continue; }
+    const d = dateAtStart(r.cells[0]?.s ?? '');
+    if (!d) continue;
+    const amtCell = r.cells.filter((c) => c.x > 480).find((c) => parseMoney(c.s));
+    if (!amtCell) continue;
+    const m = parseMoney(amtCell.s)!;
+    const desc = r.cells.filter((c) => c.x >= 100 && c.x < 440).map((c) => c.s).join(' ');
+    const ins = inX(r, 440, 500).map((c) => c.s.match(/^(\d+)\s*\/\s*(\d+)$/)).find(Boolean);
+    const inst = ins ? { no: Number(ins[1]), count: Number(ins[2]), total: null, remaining: null } : null;
+    st.lines.push(line(0, d.date, false, desc, m.value, suffix, inst));
+  }
+  return finalize(st);
+}
+
 export function detectBank(rows: Row[], ebcdic: boolean): BankId | null {
   if (ebcdic) return 'akbank';
   const t = norm(allText(rows));
+  if (/enpara/.test(t) && /ekstre borcu/.test(t)) return 'enpara';
+  if (/bankkart/.test(t) && /hesap kesim tarihi/.test(t)) return 'ziraat';
   if (/qnb/.test(t) && /(parapuan|asgari .?deme orani)/.test(t)) return 'qnb';
   if (/garanti/.test(t) && /(bonus|hesap kesim tarihi)/.test(t)) return 'garanti';
   if (/maximum|maxipuan/.test(t) && /isbank/.test(t)) return 'isbank';
@@ -357,7 +468,7 @@ export function parseStatement(pages: PageItems[]): ParsedStatement {
   const ebcdic = looksEbcdic(flat);
   const rows = pages.flatMap((p, i) => buildRows(p, i + 1, { ebcdic }));
   const bank = detectBank(rows, ebcdic);
-  if (!bank) throw new StatementError('UNKNOWN_BANK', 'Bu ekstrenin bankası tanınamadı. Desteklenenler: Akbank, Garanti, İş Bankası, QNB, VakıfBank, Yapı Kredi.');
+  if (!bank) throw new StatementError('UNKNOWN_BANK', 'Bu ekstrenin bankası tanınamadı. Desteklenenler: Akbank, Enpara, Garanti, İş Bankası, QNB, VakıfBank, Yapı Kredi, Ziraat.');
   try {
     switch (bank) {
       case 'qnb': return parseQnb(rows);
@@ -366,6 +477,8 @@ export function parseStatement(pages: PageItems[]): ParsedStatement {
       case 'vakif': return parseVakif(rows);
       case 'yapikredi': return parseYapiKredi(rows);
       case 'akbank': return parseAkbank(rows);
+      case 'ziraat': return parseZiraat(rows);
+      case 'enpara': return parseEnpara(rows);
     }
   } catch (e) {
     if (e instanceof StatementError) throw e;

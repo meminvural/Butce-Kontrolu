@@ -42,7 +42,13 @@ API_DESC = {
     'net_position_in_base': 'Para birimi bazında net pozisyon ve baz para birimine çevrilmiş net değer.',
     'fx_rate': 'İki para birimi arası kur: doğrudan, ters veya USD üzerinden çapraz.',
     'debt_service_outlook': 'Önümüzdeki aylar için kaynak bazında (kredi taksidi, kart…) borç servisi tahmini.',
-    'import_card_statement': 'Ekstre içe aktarma (ATOMİK: hepsi ya da hiçbiri). `action=add` kalemleri gider/transfer olarak işler, ödemeleri kaynak hesaptan transfer (kaynak yoksa "kaynak belirsiz") yazar, `reverse_entries` ile tahmini kayıtları iptal eder, istenirse kart profilini günceller, ekstre özetini `card_statement_imports`a kaydeder. Aynı dosya ikinci kez yüklenemez; `replace=true` ile üzerine yazılır. Dönüş: eklenen/ödeme/atlanan/iptal sayıları ve kalan fark.',
+    'import_card_statement': 'Ekstre içe aktarma (ATOMİK: hepsi ya da hiçbiri). `action=add` kalemleri `_statement_entry` ile deftere yazar: harcama/taksit/faiz/ücret gider olur, ödeme kaynak hesaptan transfer (kaynak yoksa "kaynak belirsiz"), iade kart kredisi olur. Taksitli kalem "kalan taksitler" planı olarak yazılır (geçmiş dilimler ekstrenin önceki bakiyesindedir). `reverse_entries` tahmini kayıtları iptal eder, istenirse kart profilini günceller, ekstre özetini ve satırları `card_statement_imports`a kaydeder. Aynı dosya ikinci kez yüklenemez; `replace=true` üzerine yazar.',
+    'amend_statement_line': 'Yüklenmiş ekstrede satır düzeltir. `op=edit` alanları değiştirir (eski defter kaydı iptal edilir, yenisi yazılır; `include` true/false ile atlanmış satır deftere alınır ya da defterden çıkarılır), `op=add` manuel satır ekler ve deftere yazar, `op=remove` satırı çıkarır (kaydı iptal eder). Satır numaraları asla yeniden kullanılmaz. Dönüş: defterin yeni tutarı ve ekstreyle farkı.',
+    'update_statement': 'Yüklenmiş ekstrenin başlığını düzeltir: kesim/son ödeme/dönem başı tarihi, dönem borcu, asgari ödeme, önceki bakiye, limit. İstenirse kartın limit, kesim günü ve son ödeme gününü de günceller. Dönüş: defter ↔ ekstre farkı.',
+    'delete_statement': 'Ekstre kaydını siler; `p_reverse=true` ise ekstrenin deftere eklediği kayıtlar da iptal edilir (kart borcu ekstre öncesine döner). Defter kaydı hiçbir zaman silinmez.',
+    'amend_entry': 'İşlemi düzeltir (tarih, tutar, açıklama; gelir/gider/kart harcamasında hesap ve kategori; transfer/kart ödemesinde çıkan-giren hesap). Eski kayıt İPTAL edilir, doğrusu yazılır; ekler yeni kayda taşınır. Ekstreden gelen, taksitli, bölünmüş, kredi taksidine/planlı kaleme bağlı kayıtlar reddedilir (ilgili ekrandan düzeltilir ya da iptal edilir).',
+    'update_account': 'Hesap adı, kurum, son 4 hane, limit (kart/ek hesap), kesim günü, son ödeme günü ve asgari ödeme oranını günceller. Tür ve para birimi değişmez.',
+    'set_opening_balance': 'Açılış / devreden bakiyeyi düzeltir: eski açılış kaydı iptal edilir, yenisi yazılır (borç hesaplarında tutar borçtur). 0 verilirse açılış kaldırılır.',
     'statement_status': 'Her kart için son ekstre durumu: kesim, borç, asgari, güncellik (`is_stale`), defterin hesapladığı borç ve fark.',
     'statement_reconcile': 'Önizleme için defterin verilen kesimdeki durumu: kart borcu (`owed`), faturalanmamış taksit (`unbilled`), ekstreye karşılık gelen tutar (`derived`).',
     'financial_health': 'Defter bütünlüğü ve kart/kredi/ekstre tutarlılığı denetimi (16 kontrol). Salt okunur; her kontrol için ciddiyet (`ok/info/warn/crit`), sorun sayısı, ilk 5 örnek ve öneri döner.',
@@ -51,6 +57,9 @@ API_DESC = {
     'handle_new_user': 'Yeni kullanıcı kaydında profil ve varsayılan kategorileri oluşturur (tetikleyici).',
 }
 INTERNAL_DESC = {
+    '_statement_entry': 'Tek ekstre satırından defter kaydı üretir (içe aktarma ve satır düzeltme aynı kodu kullanır). Yönü `kind` belirler: ödeme/iade borcu azaltır, diğerleri artırır.',
+    '_entry_open': 'Kaydın iptal edilebilir durumda (yayınlanmış, ters kayıt değil) olup olmadığı.',
+    '_statement_line_json': 'Ekstre satırını saklanacak biçime getirir (tutar işareti türden gelir: ödeme/iade eksi).',
     '_uid': 'Giriş yapmış kullanıcının kimliği.',
     '_today': "Kullanıcının saat dilimine göre bugün (profil yoksa Europe/Istanbul).",
     '_check_amount': 'Tutar doğrulaması.',
@@ -216,7 +225,7 @@ def main():
     w('| Dosya | Görev |\n|---|---|')
     for f, d in [('types.ts', 'Tipler: banka, satır türü, ayrıştırılmış ekstre, hata sınıfı'),
                  ('text.ts', 'PDF metin öğelerinden satır/hücre kurma, EBCDIC çözme (Akbank), tutar ve tarih ayrıştırma'),
-                 ('parsers.ts', 'Altı banka ayrıştırıcısı (Akbank, Garanti, İş Bankası, QNB, VakıfBank, Yapı Kredi), banka tespiti, ortak doğrulamalar (`checks`)'),
+                 ('parsers.ts', 'Sekiz banka ayrıştırıcısı (Akbank, Enpara, Garanti, İş Bankası, QNB, VakıfBank, Yapı Kredi, Ziraat), banka tespiti, ortak doğrulamalar (`checks`)'),
                  ('match.ts', 'Ekstre satırlarını defter kayıtlarıyla eşleştirir (tutar + tarih + açıklama puanı; ≥5 eşleşti, ≥3,5 olası, altı yeni); kategori önerisi'),
                  ('import.ts', 'Varsayılan kararlar, dosya SHA-256, `import_card_statement` yükü'),
                  ('pdf.ts', 'pdf.js ile tarayıcıda okuma (şifreli PDF desteği)')]:

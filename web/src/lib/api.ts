@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
+import type { LineKind } from './statements/types';
 import type {
   AccountBalance, Attachment, BudgetRow, CardOverview, CardStatement, Category, CategoryMonthly, Entry, EntryKind,
   ExchangeRate, InstallmentSlice, Loan, LoanInstallment, MonthSummary, NetBase, NetPosition, NetWorthPoint, Notice,
@@ -242,3 +243,38 @@ export const useFinancialHealth = () =>
     staleTime: 5 * 60_000,
     queryFn: () => unwrap<HealthCheck[]>(supabase.rpc('financial_health') as never),
   });
+
+// ---------- Yüklenmiş ekstreleri düzeltme ----------------------------------------------------
+export interface ImportedLine {
+  idx: number; date: string; description: string; amount: number; kind: LineKind;
+  status: string; action: 'add' | 'skip'; entry_id: string | null;
+  category_id?: string | null; source_account_id?: string | null; installments?: number; purchase_amount?: number | null; ver?: number;
+}
+export interface StatementImport {
+  id: string; account_id: string; bank: string; file_hash: string; cut_date: string; period_start: string | null; due_date: string | null;
+  statement_debt: number; min_payment: number | null; previous_balance: number | null; credit_limit: number | null; available_limit: number | null;
+  ledger_debt_after: number | null; lines: ImportedLine[]; n_lines: number; n_added: number; imported_at: string;
+}
+const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+export const useStatementImports = () =>
+  useQuery({
+    queryKey: ['stmt-imports'],
+    queryFn: async () => {
+      const rows = await unwrap<Record<string, unknown>[]>(
+        supabase.from('card_statement_imports').select('*').order('cut_date', { ascending: false }));
+      return rows.map((r) => ({
+        ...r,
+        statement_debt: Number(r.statement_debt), min_payment: num(r.min_payment), previous_balance: num(r.previous_balance),
+        credit_limit: num(r.credit_limit), available_limit: num(r.available_limit), ledger_debt_after: num(r.ledger_debt_after),
+        lines: ((r.lines as ImportedLine[]) ?? []).map((l) => ({ ...l, amount: Number(l.amount) })),
+      })) as unknown as StatementImport[];
+    },
+  });
+
+export interface AmendResult { ledger_after: number; statement_debt: number; difference: number }
+export const amendStatementLine = (importId: string, idx: number | null, p: Record<string, unknown>) =>
+  rpc<AmendResult>('amend_statement_line', { p_import_id: importId, p_idx: idx, p });
+export const updateStatement = (importId: string, p: Record<string, unknown>) =>
+  rpc<AmendResult>('update_statement', { p_import_id: importId, p });
+export const deleteStatement = (importId: string, reverse: boolean) =>
+  rpc<{ reversed: number }>('delete_statement', { p_import_id: importId, p_reverse: reverse });

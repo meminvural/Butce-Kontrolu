@@ -24,6 +24,8 @@ export function parseAmount(input: string): number | null {
   if (!s) return null;
   if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
   else if ((s.match(/\./g) ?? []).length > 1) s = s.replace(/\./g, '');
+  // Tek nokta + tam 3 hane ("30.000", "1.234") Türkçe'de binlik ayracıdır; "0.125" gibi sıfırla başlayanlar ondalıktır
+  else if (/^[1-9]\d{0,2}\.\d{3}$/.test(s)) s = s.replace('.', '');
   const n = Number(s);
   if (!Number.isFinite(n)) return null;
   return Math.round(n * 100) / 100;

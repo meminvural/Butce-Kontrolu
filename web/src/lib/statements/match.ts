@@ -22,6 +22,12 @@ export interface LineMatch {
   score: number;
 }
 
+/** Kartın taksit planı dilimi (card_installment_slices) */
+export interface CardSlice {
+  entry_id: string; entry_date: string; description: string | null;
+  slice_no: number; slice_count: number; billing_date: string; amount: number;
+}
+
 export interface MatchResult {
   lines: LineMatch[];
   /** Defterde olup ekstrede görünmeyen (dönem içi) kayıtlar */
@@ -36,6 +42,7 @@ const tokens = (s: string) => {
   return new Set(n.replace(/[^a-z0-9 ]/g, ' ').split(' ').filter((t) => t.length >= 3 && !STOP.has(t) && !/^\d+$/.test(t)));
 };
 const dayDiff = (a: string, b: string) => Math.abs(Math.round((Date.parse(a + 'T12:00:00Z') - Date.parse(b + 'T12:00:00Z')) / 86400000));
+const addDays = (s: string, n: number) => { const d = new Date(s + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const addMonths = (s: string, n: number) => { const d = new Date(s + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
 
 function descScore(line: StatementLine, led: LedgerCardLine): number {
@@ -56,7 +63,7 @@ function descScore(line: StatementLine, led: LedgerCardLine): number {
  *  • Açıklama: ortak anlamlı kelime +1,5
  * ≥5 "eşleşti", ≥3,5 "olası eşleşme", altı "yeni". Aynı gün birden çok ödeme tek defter kaydına denk gelebilir.
  */
-export function matchStatement(st: ParsedStatement, ledger: LedgerCardLine[]): MatchResult {
+export function matchStatement(st: ParsedStatement, ledger: LedgerCardLine[], slices: CardSlice[] = []): MatchResult {
   const cand = ledger.filter((l) => l.entry_kind !== 'opening_balance' && l.entry_kind !== 'adjustment');
   type Pair = { li: number; ci: number; score: number };
   const pairs: Pair[] = [];
@@ -114,6 +121,30 @@ export function matchStatement(st: ParsedStatement, ledger: LedgerCardLine[]): M
     const g = groupHit.get(li);
     if (g !== undefined) return { line, status: 'maybe', entryId: cand[g].entry_id, ledgerDate: cand[g].entry_date, ledgerDesc: `${cand[g].description ?? ''} (birden çok ödeme tek kayıt)`, score: 3.5 };
     return { line, status: 'new', entryId: null, ledgerDate: null, ledgerDesc: null, score: 0 };
+  });
+  // Taksit planı: önceki ekstrede "kalan taksitler" plan olarak yazıldıysa, bu ekstredeki dilim ZATEN defterdedir.
+  // Aynı dilim iki kez eklenirse borç çift sayılır; bu yüzden bu satırlar "sistemde var" sayılır.
+  const usedS = new Set<number>();
+  lines.forEach((m, li) => {
+    if (m.status !== 'new' || m.line.amount <= 0) return;
+    const inst = m.line.installment;
+    let bestK = -1, bestSc = 0;
+    slices.forEach((sl, k) => {
+      if (usedS.has(k)) return;
+      if (Math.abs(sl.amount - m.line.amount) > 0.5) return;
+      if (sl.billing_date < addDays(from, -3) || sl.billing_date > addDays(st.cutDate, 3)) return;
+      // plan "kalan taksit" olarak yazıldığı için numaralar kaydığından, KALAN taksit sayısı karşılaştırılır
+      const sameNo = !!inst && inst.count - inst.no === sl.slice_count - sl.slice_no;
+      const words = descScore(m.line, { entry_id: sl.entry_id, entry_date: sl.entry_date, entry_kind: 'card_purchase', description: sl.description, amount: -sl.amount });
+      const sc = (sameNo ? 3 : 0) + (words > 0 ? 2 : 0) + 1;
+      if ((sameNo || words > 0) && sc > bestSc) { bestSc = sc; bestK = k; }
+    });
+    if (bestK >= 0) {
+      usedS.add(bestK);
+      const sl = slices[bestK];
+      lines[li] = { line: m.line, status: 'matched', entryId: sl.entry_id, ledgerDate: sl.billing_date,
+        ledgerDesc: `${sl.description ?? ''} (${sl.slice_no}/${sl.slice_count}. taksit — önceki ekstreden plan)`, score: 5 + bestSc };
+    }
   });
   const ledgerOnly = cand.filter((l, ci) => !usedC.has(ci) && l.entry_date >= from && l.entry_date <= st.cutDate);
   return { lines, ledgerOnly };

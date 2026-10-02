@@ -5,8 +5,8 @@ Ayrıntı: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Tam referans (otoma
 
 ## Klasörler
 ```
-supabase/migrations/   12 migration (0007 Storage'a özel)
-supabase/tests/        147 test: ledger (45) + phases (55) + health (47)
+supabase/migrations/   14 migration (0007 Storage'a özel)
+supabase/tests/        226 test: ledger (45) + phases (55) + health (47) + ekstre düzenleme (44) + düzeltme (35)
 web/                   React uygulaması, 14 sayfa
 docs/                  Mimari + sistem referansı
 scripts/               Referans belgesini şemadan üreten araçlar
@@ -65,7 +65,7 @@ Supabase → Authentication → URL Configuration: Site URL ve Redirect URLs'e s
 createdb butce
 psql -d butce -f supabase/tests/_supabase_shim.sql
 for f in supabase/migrations/*.sql; do case $f in *0007*) continue;; esac; psql -v ON_ERROR_STOP=1 -d butce -f $f; done   # 0007 Storage'a özel
-for t in ledger_tests phases_tests health_tests; do psql -d butce -v ON_ERROR_STOP=1 -f supabase/tests/$t.sql; done
+for t in ledger_tests phases_tests health_tests stmt_edit_tests corrections_tests; do psql -d butce -v ON_ERROR_STOP=1 -f supabase/tests/$t.sql; done
 ```
 
 ## Sistem referansını yenileme

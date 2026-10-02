@@ -166,7 +166,25 @@ PDF → banka tespiti → ayrıştırma → iç tutarlılık kontrolleri (✓/�
 - **`import_card_statement(p jsonb)`** tek işlemde (hepsi ya da hiçbiri) kalemleri, ödemeleri, isteğe bağlı tahmini kayıt iptallerini ve kart profili güncellemesini yapar; ekstre özetini `card_statement_imports`a yazar.
 - **Tekrar yükleme güvenli:** aynı dosya (SHA-256) iki kez yüklenemez; kalem başına `st:<hash>:<sıra>` idempotency anahtarı vardır.
 - **Ekstre ↔ defter farkı:** `statement_status()` her kart için defterin ekstre kesimindeki hesaplanan borcu ile bankanın ekstre borcunu karşılaştırır. Fark "Sistem sağlığı"nda uyarı olarak görünür.
+- **Ekstreden kart oluşturma:** ekstredeki kart sistemde yoksa önizleme "yeni kart" formu açar (ad, banka, limit, kesim ve son ödeme günü ekstreden dolar; eksikse elle girilir). Ekstrenin **önceki bakiyesi** kartın açılış borcu olur (açılış tarihi = dönem başı − 1 gün); böylece ilk ekstre defterle birebir tutar.
+- **Önizlemede düzenleme:** başlık alanları (borç, asgari, önceki bakiye, tarihler, limit, kart numarası) ve her satır (tarih, açıklama, tür, tutar, taksit no/sayısı, kategori, ödeme kaynağı) düzenlenir; satır eklenir/silinir; tutarlılık kontrolleri her değişiklikte yeniden hesaplanır. Tutar her zaman pozitif girilir, yönü **tür** belirler (ödeme ve iade borcu azaltır).
+- **Taksit = kalan plan:** ekstredeki "k/n. taksit" satırı, bu ekstreden itibaren kalan `n−k+1` taksitin planı olarak yazılır (tutar = dilim × kalan sayı, dönem içi tarihli). Geçmiş dilimler zaten ekstrenin önceki bakiyesindedir; tam alışveriş tutarı yazılırsa çift sayılırdı. Sonraki ekstrede aynı planın dilimi `match.ts` tarafından "sistemde var" (plan dilimi) olarak eşleştirilir ve atlanır.
+- **Sonradan düzeltme** (`amend_statement_line`, `update_statement`, `delete_statement`): yüklenmiş ekstrenin satırı değiştirilir, eklenir, çıkarılır; başlığı düzeltilir; ekstre silinir. Defter kuralı korunur: eski kayıt **iptal edilir**, yenisi `st:<hash>:<sıra>:v<n>` anahtarıyla yazılır; satır numaraları asla yeniden kullanılmaz. Her düzeltme sonunda ekstre ↔ defter farkı yeniden hesaplanır.
 - **Dikkat:** ödeme satırını atlamak, önceki dönem borcunu defterde bırakır ve fark yaratır. Ekstredeki "önceki bakiye" ile defterin kesimden önceki borcu da ayrıca karşılaştırılmalıdır.
+
+## 9b. Düzeltme araçları (her ekran)
+
+Defter kuralı değişmez: **kayıt silinmez**. Her düzeltme eski kaydı iptal eder, doğrusunu yazar; iz kalır.
+
+| Ekran | Düzeltilebilen | Fonksiyon |
+|---|---|---|
+| İşlemler, Özet, Kartlar (işlem listesi olan her yer) | tarih, tutar, açıklama, hesap, kategori; transferde çıkan/giren hesap | `amend_entry` |
+| Hesaplar | ad, kurum, son 4 hane, limit, kesim/son ödeme günü, asgari oranı; açılış/devreden bakiye | `update_account`, `set_opening_balance` |
+| Krediler | ad, kurum, arşivleme | `update_account` |
+| Ekstre | başlık, satır ekleme/düzenleme/çıkarma, silme | `update_statement`, `amend_statement_line`, `delete_statement` |
+| Kategoriler, Bütçe, Planlı/Düzenli | doğrudan düzenleme (zaten vardı) | tablo güncellemesi |
+
+`amend_entry` şunları reddeder ve kullanıcıyı doğru yola yönlendirir: ekstreden gelen kayıt (ekstre ekranından düzeltilir), taksitli alışveriş, bölünmüş harcama, kredi taksidine/planlı kaleme bağlı kayıt (iptal edilir).
 
 ## 10. Sistem sağlığı (`financial_health()`)
 

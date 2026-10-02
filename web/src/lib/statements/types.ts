@@ -1,7 +1,7 @@
-export type BankId = 'akbank' | 'garanti' | 'isbank' | 'qnb' | 'vakif' | 'yapikredi';
+export type BankId = 'akbank' | 'garanti' | 'isbank' | 'qnb' | 'vakif' | 'yapikredi' | 'ziraat' | 'enpara';
 
 export const BANK_LABEL: Record<BankId, string> = {
-  akbank: 'Akbank', garanti: 'Garanti BBVA', isbank: 'İş Bankası', qnb: 'QNB', vakif: 'VakıfBank', yapikredi: 'Yapı Kredi',
+  akbank: 'Akbank', garanti: 'Garanti BBVA', isbank: 'İş Bankası', qnb: 'QNB', vakif: 'VakıfBank', yapikredi: 'Yapı Kredi', ziraat: 'Ziraat Bankası', enpara: 'Enpara',
 };
 
 export type LineKind = 'purchase' | 'installment' | 'cash_advance' | 'payment' | 'refund' | 'interest' | 'tax' | 'fee';

@@ -679,3 +679,33 @@ button.heat-cell:hover, button.heat-cell:focus-visible { outline: 2px solid var(
 .tag-sev-warn { background: #f5ead3; color: var(--warn); }
 .tag-sev-crit { background: var(--debt-soft); color: var(--debt); }
 @media (prefers-color-scheme: dark) { .tag-sev-info { background: #1d2c3a; } .tag-sev-warn { background: #3a2f1a; } }
+
+/* =====================================================================
+   Ekstre düzenleme
+   ===================================================================== */
+.stmt-sub { margin: 14px 0 6px; font-size: 0.95rem; }
+.head-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 14px; margin: 8px 0 14px; }
+.head-grid .stmt-field { min-width: 0; }
+.head-grid input:not([type=checkbox]), .head-grid select { width: 100%; font: inherit; padding: 6px 8px; }
+.amt-input { width: 110px; text-align: right; font: inherit; font-variant-numeric: tabular-nums; padding: 4px 6px; }
+.head-grid .amt-input { width: 100%; text-align: left; }
+.int-input { width: 56px; font: inherit; padding: 4px 6px; }
+.kind-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 4px; }
+.kind-row select { max-width: 170px; }
+.inst-edit { display: inline-flex; gap: 4px; align-items: center; }
+.stmt-lines input[type=date] { font: inherit; font-size: 0.85rem; padding: 3px 4px; }
+.stmt-lines .row-actions { display: flex; flex-wrap: wrap; gap: 6px; min-width: 150px; }
+.stmt-lines .add-row { background: var(--paper); }
+.newcard { margin-top: 14px; padding: 14px; border: 1px dashed var(--line); border-radius: var(--radius-m); background: var(--paper); }
+.newcard h3 { margin: 0 0 4px; font-size: 1rem; }
+.note-box { padding: 10px 12px; border-radius: var(--radius-m); background: #f5ead3; color: var(--warn); font-size: 0.88rem; }
+@media (prefers-color-scheme: dark) { .note-box { background: #3a2f1a; } }
+.imp-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.imp-list > li { border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface); }
+.imp-list > li.is-open { border-color: var(--asset); }
+.imp-head { width: 100%; display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: space-between; align-items: center; padding: 12px 14px; background: none; border: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.imp-sum { display: inline-flex; gap: 10px; align-items: center; font-weight: 800; font-variant-numeric: tabular-nums; }
+.imp-editor { padding: 4px 14px 16px; }
+.recon-line { margin: 12px 0; }
+.danger-zone { border-top-color: var(--debt-soft); }
+.btn-danger { background: var(--debt); color: #fff; border-color: var(--debt); }
